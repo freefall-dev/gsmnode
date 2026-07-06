@@ -1,0 +1,31 @@
+# Design assets / source kits — excluded per project decision
+Design/
+
+# Node
+node_modules/
+
+# Flutter / Dart
+Phone App/build/
+Phone App/.dart_tool/
+Phone App/.flutter-plugins
+Phone App/.flutter-plugins-dependencies
+Phone App/.packages
+Phone App/pubspec.lock
+
+# Android / Gradle
+.gradle/
+.kotlin/
+*.iml
+Phone App/android/local.properties
+Phone App/android/key.properties
+
+# Go build output / binaries
+*.exe
+
+# Environment & secrets
+.env
+*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db

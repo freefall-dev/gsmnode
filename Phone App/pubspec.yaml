@@ -1,0 +1,31 @@
+name: sms_gateway_phone
+description: gsmnode phone client — turns an Android phone into an SMS gateway controlled via the API Server.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  shared_preferences: ^2.3.2
+  permission_handler: ^11.3.1
+  google_fonts: ^8.1.0
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+
+# App launcher icons — generated from the gsmnode design-system app icon.
+# Regenerate with: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/icon/app-icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#2E9E6B"
+  adaptive_icon_foreground: "assets/icon/adaptive-foreground.png"

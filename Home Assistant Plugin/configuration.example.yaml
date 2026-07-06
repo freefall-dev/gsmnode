@@ -1,0 +1,49 @@
+# RECOMMENDED: add this integration from the UI instead
+# (Settings -> Devices & Services -> Add Integration -> gsmnode).
+# The blocks below are only for the OPTIONAL legacy `notify.gsmnode`
+# YAML service and for receiving incoming SMS via a webhook.
+
+# --- Optional: legacy notify.gsmnode YAML service ---------------------
+notify:
+  - platform: gsmnode
+    name: gsmnode                 # service becomes notify.gsmnode
+    api_base: http://10.2.1.10:8080   # the gsmnode API Server (reachable from HA)
+    email: !secret gsmnode_email
+    password: !secret gsmnode_password
+    device_id: my-phone               # optional: pin to a specific device
+
+# secrets.yaml:
+#   gsmnode_email: you@example.com
+#   gsmnode_password: your-password
+
+# --- Usage ----------------------------------------------------------------
+# Send an SMS:
+#   service: notify.gsmnode
+#   data: { message: "Hello", target: ["+15551234567"] }
+#
+# Place a phone call (gateway phone dials the number; message is ignored):
+#   service: notify.gsmnode
+#   data: { message: "", target: ["+15551234567"], data: { type: call } }
+
+# --- Optional: receive incoming SMS as Home Assistant events ---------------
+# The API Server can POST the `sms:received` webhook to a HA webhook trigger.
+#
+# 1. Create an automation with a webhook trigger (gives you a webhook_id):
+#
+# automation:
+#   - alias: "gsmnode - incoming SMS"
+#     trigger:
+#       - platform: webhook
+#         webhook_id: gsmnode_incoming
+#         allowed_methods: [POST]
+#         local_only: true
+#     action:
+#       - service: persistent_notification.create
+#         data:
+#           title: "SMS from {{ trigger.json.payload.phone_number }}"
+#           message: "{{ trigger.json.payload.message }}"
+#
+# 2. Register the webhook with the API Server (one-time), pointing at:
+#      http://<home-assistant>:8123/api/webhook/gsmnode_incoming
+#    e.g. via the Web App "Webhooks" page or:
+#      POST /api/webhooks  {"event":"sms:received","url":"<that url>"}

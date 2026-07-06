@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "gsmnode",
+        "description": "Connect to your gsmnode API Server.",
+        "data": {
+          "api_base": "API Server URL",
+          "email": "Email",
+          "password": "Password",
+          "device_id": "Default device ID (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the API Server. Check the URL and that it is reachable.",
+      "invalid_auth": "Invalid email or password."
+    },
+    "abort": {
+      "already_configured": "This gateway is already configured."
+    }
+  },
+  "services": {
+    "send_sms": {
+      "name": "Send SMS",
+      "description": "Send an SMS through the gateway.",
+      "fields": {
+        "phone_numbers": { "name": "Phone numbers", "description": "One or more recipient phone numbers." },
+        "message": { "name": "Message", "description": "The text to send." },
+        "device_id": { "name": "Device", "description": "Device to send from." },
+        "sim_number": { "name": "SIM number", "description": "Which SIM to use on a dual-SIM phone." }
+      }
+    },
+    "call": {
+      "name": "Place call",
+      "description": "Tell a gateway device to place an outbound phone call.",
+      "fields": {
+        "phone_number": { "name": "Phone number", "description": "The number to call." },
+        "device_id": { "name": "Device", "description": "Device to call from." }
+      }
+    }
+  }
+}

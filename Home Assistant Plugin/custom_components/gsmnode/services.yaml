@@ -1,0 +1,53 @@
+send_sms:
+  name: Send SMS
+  description: Send an SMS through the gateway.
+  fields:
+    phone_numbers:
+      name: Phone numbers
+      description: One or more recipient phone numbers.
+      required: true
+      example: '["+15551234567"]'
+      selector:
+        text:
+          multiple: true
+    message:
+      name: Message
+      description: The text to send.
+      required: true
+      example: Hello from Home Assistant
+      selector:
+        text:
+          multiline: true
+    device_id:
+      name: Device
+      description: Device to send from (defaults to the configured / most recent device).
+      example: my-phone
+      selector:
+        text:
+    sim_number:
+      name: SIM number
+      description: Which SIM to use on a dual-SIM phone.
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 4
+          mode: box
+
+call:
+  name: Place call
+  description: Tell a gateway device to place an outbound phone call.
+  fields:
+    phone_number:
+      name: Phone number
+      description: The number to call.
+      required: true
+      example: "+15551234567"
+      selector:
+        text:
+    device_id:
+      name: Device
+      description: Device to call from (defaults to the configured / most recent device).
+      example: my-phone
+      selector:
+        text:

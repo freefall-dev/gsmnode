@@ -1,0 +1,336 @@
+/* gsmnode design system — tokens from Design/SMS Gateway logo design/tokens/*,
+   mapped into Tailwind v4. Signal-green + ink, developer-tool aesthetic. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ============================================================
+   RAW RAMPS + SEMANTIC ALIASES (light)
+   ============================================================ */
+:root {
+  /* Signal green (brand) — shared chroma, stepped lightness */
+  --green-100: oklch(0.95 0.04 152);
+  --green-200: oklch(0.88 0.07 152);
+  --green-300: oklch(0.78 0.11 152);
+  --green-500: oklch(0.60 0.14 152); /* primary */
+  --green-600: oklch(0.52 0.13 152);
+  --green-700: oklch(0.44 0.11 152);
+  --green-on-dark: oklch(0.72 0.14 152);
+
+  /* Ink & paper */
+  --ink:      #12161C;
+  --ink-900:  #0A0D11;
+  --ink-800:  #1A1F27;
+  --paper:    #FAFAF9;
+  --white:    #FFFFFF;
+
+  /* Cool gray ramp */
+  --gray-50:  #F4F5F4;
+  --gray-100: #E9EBEA;
+  --gray-200: #DCDFDE;
+  --gray-300: #C2C7C6;
+  --gray-400: #9AA0A2;
+  --gray-500: #6B7278;
+  --gray-600: #4A5157;
+  --gray-700: #333A40;
+
+  /* Semantic status */
+  --success:    oklch(0.60 0.14 152); /* green — also "delivered" */
+  --warning:    oklch(0.72 0.15 75);
+  --danger:     oklch(0.60 0.17 25);
+  --info:       oklch(0.62 0.13 245);
+  --success-x:  oklch(0.95 0.04 152);
+  --warning-x:  oklch(0.95 0.05 80);
+  --danger-x:   oklch(0.95 0.05 25);
+  --info-x:     oklch(0.95 0.04 245);
+
+  /* Semantic aliases — reference these in components */
+  --bg-page:        var(--paper);
+  --bg-sunken:      var(--gray-50);
+  --surface-card:   var(--white);
+  --surface-raised: var(--white);
+  --surface-inverse:var(--ink);
+  --surface-code:   var(--ink-900);
+
+  --border-subtle:  rgba(18, 22, 28, 0.08);
+  --border-strong:  rgba(18, 22, 28, 0.20);
+  --border-focus:   var(--green-500);
+
+  --text-primary:   var(--ink);
+  --text-secondary: var(--gray-700);
+  --text-muted:     var(--gray-500);
+  --text-inverse:   #F5F6F4;
+  --text-brand:     var(--green-600);
+  --text-link:      var(--green-600);
+
+  --brand:          var(--green-500);
+  --brand-hover:    var(--green-600);
+  --brand-active:   var(--green-700);
+  --brand-tint:     var(--green-100);
+  --brand-contrast: var(--white);
+  --brand-on-dark:  var(--green-on-dark);
+
+  --success-tint:   var(--success-x);
+  --warning-tint:   var(--warning-x);
+  --danger-tint:    var(--danger-x);
+  --info-tint:      var(--info-x);
+
+  --ring-focus:  0 0 0 3px oklch(0.60 0.14 152 / 0.45);
+  --ring-danger: 0 0 0 3px oklch(0.60 0.17 25 / 0.35);
+
+  /* Flat, low-contrast elevation */
+  --sh-xs:   0 1px 2px rgba(18, 22, 28, 0.04);
+  --sh-sm:   0 1px 2px rgba(18, 22, 28, 0.06), 0 1px 1px rgba(18, 22, 28, 0.04);
+  --sh-md:   0 4px 12px rgba(18, 22, 28, 0.08);
+  --sh-lg:   0 8px 24px rgba(18, 22, 28, 0.14);
+  --sh-xl:   0 16px 40px rgba(18, 22, 28, 0.18);
+
+  --dur-instant: 100ms;
+  --dur-fast:    120ms;
+  --dur-base:    180ms;
+  --dur-slow:    260ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ============================================================
+   DARK THEME — only the semantic layer remaps.
+   Namespaced data-gsm-theme so it matches the design system.
+   ============================================================ */
+[data-gsm-theme="dark"] {
+  --bg-page:        var(--ink-900);
+  --bg-sunken:      #0E1216;
+  --surface-card:   #14191F;
+  --surface-raised: #1A2027;
+  --surface-inverse:var(--white);
+  --surface-code:   #05070A;
+
+  --border-subtle:  rgba(255, 255, 255, 0.07);
+  --border-strong:  rgba(255, 255, 255, 0.18);
+  --border-focus:   var(--green-on-dark);
+
+  --text-primary:   #F5F6F4;
+  --text-secondary: var(--gray-200);
+  --text-muted:     var(--gray-400);
+  --text-inverse:   var(--ink);
+  --text-brand:     var(--green-on-dark);
+  --text-link:      var(--green-on-dark);
+
+  --brand:          var(--green-500);
+  --brand-hover:    var(--green-on-dark);
+  --brand-active:   var(--green-600);
+  --brand-tint:     oklch(0.60 0.14 152 / 0.16);
+  --brand-contrast: var(--white);
+
+  --success:        var(--green-300);
+  --warning:        oklch(0.80 0.14 80);
+  --danger:         oklch(0.72 0.16 25);
+  --info:           oklch(0.72 0.12 245);
+  --success-tint:   oklch(0.60 0.14 152 / 0.16);
+  --warning-tint:   oklch(0.72 0.15 75 / 0.16);
+  --danger-tint:    oklch(0.60 0.17 25 / 0.18);
+  --info-tint:      oklch(0.62 0.13 245 / 0.16);
+
+  --ring-focus:  0 0 0 3px oklch(0.72 0.14 152 / 0.45);
+
+  --sh-xs:   0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-sm:   0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-md:   0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4);
+  --sh-lg:   0 8px 24px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.4);
+  --sh-xl:   0 16px 40px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark;
+}
+
+/* ============================================================
+   TAILWIND THEME — utilities resolve to the semantic vars,
+   so everything flips automatically under data-gsm-theme="dark".
+   ============================================================ */
+@theme inline {
+  --color-*: initial;
+
+  --color-page:        var(--bg-page);
+  --color-sunken:      var(--bg-sunken);
+  --color-card:        var(--surface-card);
+  --color-raised:      var(--surface-raised);
+  --color-inverse:     var(--surface-inverse);
+  --color-code:        var(--surface-code);
+
+  --color-subtle:      var(--border-subtle);
+  --color-strong:      var(--border-strong);
+
+  --color-primary:     var(--text-primary);
+  --color-secondary:   var(--text-secondary);
+  --color-muted:       var(--text-muted);
+  --color-on-brand:    var(--brand-contrast);
+  --color-link:        var(--text-link);
+
+  --color-brand:        var(--brand);
+  --color-brand-hover:  var(--brand-hover);
+  --color-brand-active: var(--brand-active);
+  --color-brand-tint:   var(--brand-tint);
+  --color-brand-text:   var(--text-brand);
+
+  --color-success:      var(--success);
+  --color-success-tint: var(--success-tint);
+  --color-warning:      var(--warning);
+  --color-warning-tint: var(--warning-tint);
+  --color-danger:       var(--danger);
+  --color-danger-tint:  var(--danger-tint);
+  --color-info:         var(--info);
+  --color-info-tint:    var(--info-tint);
+
+  --color-white:  #FFFFFF;
+  --color-ink:    var(--ink);
+  --color-green:  var(--green-500);
+
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-sans:    'IBM Plex Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --radius-*: initial;
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   15px;
+  --radius-2xl:  18px;
+  --radius-full: 9999px;
+
+  --shadow-*: initial;
+  --shadow-xs:   var(--sh-xs);
+  --shadow-sm:   var(--sh-sm);
+  --shadow-md:   var(--sh-md);
+  --shadow-lg:   var(--sh-lg);
+  --shadow-xl:   var(--sh-xl);
+  --shadow-ring: var(--ring-focus);
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display face for titles & metrics */
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* Shared control styles (inputs, selects, textareas) */
+@utility gn-input {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  padding: 0 12px;
+  height: 40px;
+  font-size: 0.875rem;
+  font-family: var(--font-sans);
+  transition: border-color var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-fast) var(--ease-standard);
+}
+
+@utility gn-textarea {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font-size: 0.875rem;
+  font-family: var(--font-sans);
+  resize: vertical;
+  transition: border-color var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-fast) var(--ease-standard);
+}
+
+.gn-input:focus,
+.gn-textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--ring-focus);
+}
+
+.gn-input::placeholder,
+.gn-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* Primary button — flat signal-green, no glow (infrastructure) */
+@utility gn-btn-pri {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: var(--brand);
+  color: var(--brand-contrast);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
+}
+
+.gn-btn-pri:hover:not(:disabled) { background: var(--brand-hover); }
+.gn-btn-pri:active:not(:disabled) { background: var(--brand-active); transform: translateY(1px); }
+.gn-btn-pri:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.gn-btn-pri:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Secondary button */
+@utility gn-btn-sec {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
+}
+
+.gn-btn-sec:hover:not(:disabled) { background: var(--bg-sunken); }
+.gn-btn-sec:active:not(:disabled) { transform: translateY(1px); }
+.gn-btn-sec:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.gn-btn-sec:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Small button size modifier */
+@utility gn-btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+/* Mono eyebrow — uppercase, tracked out */
+@utility gn-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}

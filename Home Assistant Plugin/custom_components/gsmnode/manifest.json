@@ -1,0 +1,13 @@
+{
+  "domain": "gsmnode",
+  "name": "gsmnode",
+  "version": "1.2.0",
+  "config_flow": true,
+  "documentation": "https://github.com/your-org/sms-gateway",
+  "issue_tracker": "https://github.com/your-org/sms-gateway/issues",
+  "dependencies": [],
+  "codeowners": [],
+  "requirements": [],
+  "integration_type": "service",
+  "iot_class": "local_polling"
+}
