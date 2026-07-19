@@ -37,6 +37,14 @@ function fmt(ts) {
   return new Date(ts).toLocaleString();
 }
 
+function simLabel(sim) {
+  const parts = [`Slot ${sim.slot}`];
+  const name = sim.carrier || sim.display_name;
+  if (name) parts.push(name);
+  if (sim.number) parts.push(sim.number);
+  return parts.join(" · ");
+}
+
 onMounted(load);
 </script>
 
@@ -59,6 +67,7 @@ onMounted(load);
             <th class="px-5 py-3 font-medium">Name</th>
             <th class="px-5 py-3 font-medium">Device ID</th>
             <th class="px-5 py-3 font-medium">Platform</th>
+            <th class="px-5 py-3 font-medium">SIMs</th>
             <th class="px-5 py-3 font-medium">Status</th>
             <th class="px-5 py-3 font-medium">Last seen</th>
             <th class="px-5 py-3"></th>
@@ -66,10 +75,10 @@ onMounted(load);
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="6" class="border-t border-subtle px-5 py-10 text-center text-sm text-muted">Loading…</td>
+            <td colspan="7" class="border-t border-subtle px-5 py-10 text-center text-sm text-muted">Loading…</td>
           </tr>
           <tr v-else-if="!devices.length">
-            <td colspan="6" class="border-t border-subtle px-5 py-10 text-center text-sm text-muted">
+            <td colspan="7" class="border-t border-subtle px-5 py-10 text-center text-sm text-muted">
               No devices yet. Register one from the phone app.
             </td>
           </tr>
@@ -77,6 +86,17 @@ onMounted(load);
             <td class="border-t border-subtle px-5 py-3 font-medium text-primary">{{ d.name || "—" }}</td>
             <td class="border-t border-subtle px-5 py-3 font-mono text-xs text-secondary">{{ d.device_id }}</td>
             <td class="border-t border-subtle px-5 py-3 text-secondary">{{ d.platform }} {{ d.app_version }}</td>
+            <td class="border-t border-subtle px-5 py-3">
+              <div v-if="d.sims && d.sims.length" class="flex flex-wrap gap-1">
+                <span
+                  v-for="s in d.sims"
+                  :key="s.slot"
+                  class="rounded-sm bg-sunken px-2 py-0.5 font-mono text-[11px] text-secondary"
+                  :title="simLabel(s)"
+                >{{ simLabel(s) }}</span>
+              </div>
+              <span v-else class="text-xs text-muted">—</span>
+            </td>
             <td class="border-t border-subtle px-5 py-3"><StatusBadge :status="d.status" /></td>
             <td class="border-t border-subtle px-5 py-3 font-mono text-xs text-secondary">{{ fmt(d.last_seen_at) }}</td>
             <td class="border-t border-subtle px-5 py-3 text-right">

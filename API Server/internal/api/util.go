@@ -32,6 +32,25 @@ func asInt(v any) int {
 	return 0
 }
 
+// SIM slots are 0-based, but they are stored 1-based (slot+1) in PocketBase
+// number fields. PocketBase returns 0 (not null) for an unset number field, so a
+// raw 0-based slot at rest can't be told apart from "not selected". Encoding as
+// slot+1 makes an absent/zero stored value unambiguously mean "unset", while the
+// external API stays 0-based.
+
+// packSlot encodes a 0-based slot for storage.
+func packSlot(slot int) int { return slot + 1 }
+
+// unpackSlot decodes a stored slot back to a 0-based slot, or nil when unset.
+func unpackSlot(v any) *int {
+	n := asInt(v)
+	if n <= 0 {
+		return nil
+	}
+	slot := n - 1
+	return &slot
+}
+
 // asStringSlice coerces a JSON array (or single string) to []string.
 func asStringSlice(v any) []string {
 	switch t := v.(type) {

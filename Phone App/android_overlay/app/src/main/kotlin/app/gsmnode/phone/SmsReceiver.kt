@@ -1,11 +1,15 @@
 package app.gsmnode.phone
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony
+import android.telephony.SubscriptionManager
+import androidx.core.content.ContextCompat
 
 /// Receives incoming SMS and forwards each message to Dart via the EventChannel
 /// sink held by MainActivity. Works while the app process is alive.
@@ -30,11 +34,38 @@ class SmsReceiver : BroadcastReceiver() {
             "from" to from,
             "body" to body.toString(),
             "timestamp" to timestamp,
+            // 0-based physical slot the message arrived on, or -1 if unknown
+            // (single-SIM device, or READ_PHONE_STATE not granted).
+            "simSlot" to receivingSlot(context, intent),
         )
 
         // EventSink must be touched on the main thread.
         Handler(Looper.getMainLooper()).post {
             MainActivity.incomingSink?.success(payload)
         }
+    }
+
+    /// Resolves which SIM slot an incoming SMS arrived on. The broadcast carries a
+    /// subscription id (under one of a couple of OEM-dependent extras); we map it
+    /// to a physical slot via SubscriptionManager. Returns -1 when it can't be
+    /// determined.
+    private fun receivingSlot(context: Context, intent: Intent): Int {
+        var subId = intent.getIntExtra(
+            "android.telephony.extra.SUBSCRIPTION_INDEX",
+            SubscriptionManager.INVALID_SUBSCRIPTION_ID,
+        )
+        if (subId < 0) subId = intent.getIntExtra("subscription", -1)
+        if (subId < 0) return -1
+        if (ContextCompat.checkSelfPermission(
+                context, Manifest.permission.READ_PHONE_STATE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) return -1
+        val sm = context.getSystemService(SubscriptionManager::class.java) ?: return -1
+        val info = try {
+            sm.getActiveSubscriptionInfo(subId)
+        } catch (e: SecurityException) {
+            null
+        }
+        return info?.simSlotIndex ?: -1
     }
 }

@@ -33,11 +33,13 @@ type messageDTO struct {
 	PhoneNumbers []string `json:"phone_numbers"`
 	TextMessage  string   `json:"text_message"`
 	DeviceID     string   `json:"device_id,omitempty"`
-	SimNumber    int      `json:"sim_number,omitempty"`
-	Status       string   `json:"status"`
-	Error        string   `json:"error,omitempty"`
-	ScheduleAt   string   `json:"schedule_at,omitempty"`
-	CreatedAt    string   `json:"created_at"`
+	// SimNumber is the 0-based SIM slot to send on; nil means the device's
+	// default SIM. A pointer so slot 0 is distinguishable from "unset".
+	SimNumber  *int   `json:"sim_number,omitempty"`
+	Status     string `json:"status"`
+	Error      string `json:"error,omitempty"`
+	ScheduleAt string `json:"schedule_at,omitempty"`
+	CreatedAt  string `json:"created_at"`
 }
 
 func recordToMessage(rec pb.Record) messageDTO {
@@ -51,7 +53,7 @@ func recordToMessage(rec pb.Record) messageDTO {
 		PhoneNumbers: asStringSlice(rec["phone_numbers"]),
 		TextMessage:  asString(rec["text_message"]),
 		DeviceID:     asString(rec["device"]),
-		SimNumber:    asInt(rec["sim_number"]),
+		SimNumber:    unpackSlot(rec["sim_number"]),
 		Status:       asString(rec["status"]),
 		Error:        asString(rec["error"]),
 		ScheduleAt:   asString(rec["schedule_at"]),
@@ -63,8 +65,10 @@ type enqueueRequest struct {
 	PhoneNumbers []string `json:"phone_numbers"`
 	TextMessage  string   `json:"text_message"`
 	DeviceID     string   `json:"device_id"`
-	SimNumber    int      `json:"sim_number"`
-	ScheduleAt   string   `json:"schedule_at"`
+	// SimNumber is the 0-based SIM slot to send on. A pointer so slot 0 can be
+	// selected explicitly; omit it (nil) to use the device's default SIM.
+	SimNumber  *int   `json:"sim_number"`
+	ScheduleAt string `json:"schedule_at"`
 }
 
 // handleEnqueueMessage queues an outbound SMS for one of the user's devices.
@@ -106,8 +110,8 @@ func (s *Server) handleEnqueueMessage(w http.ResponseWriter, r *http.Request) {
 		"owner":         uid,
 		"status":        statusPending,
 	}
-	if req.SimNumber > 0 {
-		fields["sim_number"] = req.SimNumber
+	if req.SimNumber != nil {
+		fields["sim_number"] = packSlot(*req.SimNumber)
 	}
 	if req.ScheduleAt != "" {
 		fields["schedule_at"] = req.ScheduleAt

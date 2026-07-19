@@ -58,7 +58,13 @@ onMounted(load);
         </span>
         <div class="min-w-0 flex-1">
           <div class="flex items-baseline justify-between gap-3">
-            <span class="font-mono text-sm font-medium text-primary">{{ m.phone_number }}</span>
+            <div class="flex items-baseline gap-2">
+              <span class="font-mono text-sm font-medium text-primary">{{ m.phone_number }}</span>
+              <span
+                v-if="m.sim_slot != null"
+                class="rounded-sm bg-sunken px-1.5 py-0.5 font-mono text-[10px] text-muted"
+              >SIM {{ m.sim_slot }}</span>
+            </div>
             <span class="shrink-0 font-mono text-[11px] text-muted">{{ fmt(m.received_at) }}</span>
           </div>
           <p class="mt-1 text-sm text-secondary">{{ m.message }}</p>

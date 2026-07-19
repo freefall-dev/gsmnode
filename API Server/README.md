@@ -109,10 +109,24 @@ Health check: `GET http://localhost:8080/api/health`.
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/mobile/v1/device` | Register device (auth: **user JWT**) → returns `auth_token` |
-| `POST` | `/api/mobile/v1/ping` | Heartbeat (auth: device token) |
+| `POST` | `/api/mobile/v1/ping` | Heartbeat (auth: device token). Optional body `{sims: [...]}` advertises the device's SIM slots |
 | `GET` | `/api/mobile/v1/messages` | Pull pending messages; marks them `Processed` |
 | `PATCH` | `/api/mobile/v1/messages/{id}` | Report `{status, error?}` (`Sent`/`Delivered`/`Failed`) |
-| `POST` | `/api/mobile/v1/inbox` | Report received SMS `{phone_number, message, received_at?}` |
+| `POST` | `/api/mobile/v1/inbox` | Report received SMS `{phone_number, message, received_at?, sim_slot?}` |
+
+### Multiple SIM cards
+
+On dual-SIM devices the phone enumerates its active SIMs (`READ_PHONE_STATE`) and
+reports them on each heartbeat. `GET /api/devices` then returns a `sims` array per
+device — `[{slot, subscription_id, carrier, number, display_name}]` — so callers
+know which slots exist before selecting one.
+
+- **Outbound:** pass `sim_number` (the 0-based slot) to `POST /api/messages`. The
+  device sends on that SIM's radio; if the requested slot has no active
+  subscription (or `READ_PHONE_STATE` isn't granted) the send is **rejected** and
+  reported `Failed` rather than silently going out on the default SIM.
+- **Inbound:** received SMS carry `sim_slot` (the 0-based slot they arrived on),
+  surfaced on `GET /api/inbox` items and in the `sms:received` webhook payload.
 
 ### Message lifecycle
 

@@ -14,6 +14,9 @@ type inboxDTO struct {
 	PhoneNumber string `json:"phone_number"`
 	Message     string `json:"message"`
 	ReceivedAt  string `json:"received_at"`
+	// 0-based SIM slot the message arrived on, omitted when the device couldn't
+	// attribute it.
+	SimSlot *int `json:"sim_slot,omitempty"`
 }
 
 func recordToInbox(rec pb.Record) inboxDTO {
@@ -23,6 +26,7 @@ func recordToInbox(rec pb.Record) inboxDTO {
 		PhoneNumber: asString(rec["phone_number"]),
 		Message:     asString(rec["message"]),
 		ReceivedAt:  asString(rec["received_at"]),
+		SimSlot:     unpackSlot(rec["sim_slot"]),
 	}
 }
 
@@ -52,6 +56,7 @@ type receiveSMSRequest struct {
 	PhoneNumber string `json:"phone_number"`
 	Message     string `json:"message"`
 	ReceivedAt  string `json:"received_at"`
+	SimSlot     *int   `json:"sim_slot"`
 }
 
 // handleReceiveSMS records an incoming SMS reported by a device and fires
@@ -73,24 +78,32 @@ func (s *Server) handleReceiveSMS(w http.ResponseWriter, r *http.Request) {
 		receivedAt = time.Now().UTC().Format("2006-01-02 15:04:05.000Z")
 	}
 
-	rec, err := s.pb.Create(r.Context(), colInbox, pb.Record{
+	fields := pb.Record{
 		"device":       asString(device["id"]),
 		"owner":        asString(device["owner"]),
 		"phone_number": req.PhoneNumber,
 		"message":      req.Message,
 		"received_at":  receivedAt,
-	})
+	}
+	if req.SimSlot != nil {
+		fields["sim_slot"] = packSlot(*req.SimSlot)
+	}
+	rec, err := s.pb.Create(r.Context(), colInbox, fields)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return
 	}
 
-	s.dispatchWebhooks(asString(device["owner"]), asString(device["id"]), "sms:received", map[string]any{
+	payload := map[string]any{
 		"inbox_id":     asString(rec["id"]),
 		"phone_number": req.PhoneNumber,
 		"message":      req.Message,
 		"received_at":  receivedAt,
-	})
+	}
+	if req.SimSlot != nil {
+		payload["sim_slot"] = *req.SimSlot
+	}
+	s.dispatchWebhooks(asString(device["owner"]), asString(device["id"]), "sms:received", payload)
 
 	writeJSON(w, http.StatusCreated, recordToInbox(rec))
 }

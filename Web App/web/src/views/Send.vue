@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { Send } from "@lucide/vue";
 import { api } from "../api";
 import PageHeader from "../components/PageHeader.vue";
@@ -8,10 +8,23 @@ const devices = ref([]);
 const phones = ref("");
 const text = ref("");
 const deviceId = ref("");
-const simNumber = ref("");
+const simSlot = ref(""); // "" = device default SIM; otherwise a 0-based slot
 const sending = ref(false);
 const result = ref(null);
 const error = ref("");
+
+// SIMs advertised by the chosen device (empty when "Auto" or none reported yet).
+const deviceSims = computed(() => {
+  const d = devices.value.find((x) => x.device_id === deviceId.value);
+  return d?.sims || [];
+});
+
+function simOptionLabel(sim) {
+  const name = sim.carrier || sim.display_name || "SIM";
+  return sim.number
+    ? `Slot ${sim.slot} · ${name} · ${sim.number}`
+    : `Slot ${sim.slot} · ${name}`;
+}
 
 onMounted(async () => {
   try {
@@ -44,7 +57,7 @@ async function send() {
   try {
     const body = { phone_numbers: phoneList, text_message: text.value };
     if (deviceId.value) body.device_id = deviceId.value;
-    if (simNumber.value) body.sim_number = Number(simNumber.value);
+    if (simSlot.value !== "") body.sim_number = Number(simSlot.value);
     result.value = await api.post("/messages", body);
     text.value = "";
   } catch (e) {
@@ -98,8 +111,22 @@ async function send() {
             </select>
           </div>
           <div>
-            <label class="mb-1.5 block text-sm font-medium text-primary">SIM number (optional)</label>
-            <input v-model="simNumber" type="number" min="1" class="gn-input" placeholder="1" />
+            <label class="mb-1.5 block text-sm font-medium text-primary">SIM (optional)</label>
+            <select v-if="deviceSims.length" v-model="simSlot" class="gn-input">
+              <option value="">Default SIM</option>
+              <option v-for="s in deviceSims" :key="s.slot" :value="String(s.slot)">
+                {{ simOptionLabel(s) }}
+              </option>
+            </select>
+            <input
+              v-else
+              v-model="simSlot"
+              type="number"
+              min="0"
+              class="gn-input"
+              placeholder="Default"
+            />
+            <p class="mt-1.5 text-xs text-muted">0-based slot; blank uses the device default.</p>
           </div>
         </div>
 

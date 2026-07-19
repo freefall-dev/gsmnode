@@ -103,9 +103,10 @@ class ApiClient {
     _decode(res);
   }
 
-  /// Posts an incoming SMS to the server's inbox.
+  /// Posts an incoming SMS to the server's inbox. [simSlot] is the 0-based slot
+  /// the message arrived on, when the device could attribute it.
   Future<void> postInbox(String phoneNumber, String message,
-      {DateTime? receivedAt}) async {
+      {DateTime? receivedAt, int? simSlot}) async {
     final res = await _http.post(
       _uri('/api/mobile/v1/inbox'),
       headers: _headers(storage.deviceToken),
@@ -114,16 +115,19 @@ class ApiClient {
         'message': message,
         if (receivedAt != null)
           'received_at': receivedAt.toUtc().toIso8601String(),
+        if (simSlot != null) 'sim_slot': simSlot,
       }),
     );
     _decode(res);
   }
 
-  /// Sends a heartbeat ping.
-  Future<void> ping() async {
+  /// Sends a heartbeat ping. When [sims] is provided it is reported to the
+  /// server so it can advertise the device's available SIM slots.
+  Future<void> ping({List<Map<String, dynamic>>? sims}) async {
     final res = await _http.post(
       _uri('/api/mobile/v1/ping'),
       headers: _headers(storage.deviceToken),
+      body: sims != null ? jsonEncode({'sims': sims}) : null,
     );
     _decode(res);
   }

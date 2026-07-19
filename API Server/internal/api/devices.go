@@ -10,13 +10,47 @@ import (
 )
 
 type deviceDTO struct {
-	ID         string `json:"id"`
-	DeviceID   string `json:"device_id"`
-	Name       string `json:"name"`
-	Platform   string `json:"platform"`
-	AppVersion string `json:"app_version"`
-	Status     string `json:"status"`
-	LastSeenAt string `json:"last_seen_at"`
+	ID         string    `json:"id"`
+	DeviceID   string    `json:"device_id"`
+	Name       string    `json:"name"`
+	Platform   string    `json:"platform"`
+	AppVersion string    `json:"app_version"`
+	Status     string    `json:"status"`
+	LastSeenAt string    `json:"last_seen_at"`
+	Sims       []simInfo `json:"sims"`
+}
+
+// simInfo describes one SIM active in a device, as reported by the phone.
+type simInfo struct {
+	Slot           int    `json:"slot"`
+	SubscriptionID int    `json:"subscription_id"`
+	Carrier        string `json:"carrier"`
+	Number         string `json:"number"`
+	DisplayName    string `json:"display_name"`
+}
+
+// parseSims decodes the devices.sims JSON field into a slice. It always returns
+// a non-nil slice so the DTO serializes as [] rather than null.
+func parseSims(v any) []simInfo {
+	out := []simInfo{}
+	arr, ok := v.([]any)
+	if !ok {
+		return out
+	}
+	for _, e := range arr {
+		m, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		out = append(out, simInfo{
+			Slot:           asInt(m["slot"]),
+			SubscriptionID: asInt(m["subscription_id"]),
+			Carrier:        asString(m["carrier"]),
+			Number:         asString(m["number"]),
+			DisplayName:    asString(m["display_name"]),
+		})
+	}
+	return out
 }
 
 // onlineWindow is how recently a device must have pinged to count as online.
@@ -37,6 +71,7 @@ func recordToDevice(rec pb.Record) deviceDTO {
 		AppVersion: asString(rec["app_version"]),
 		Status:     status,
 		LastSeenAt: lastSeen,
+		Sims:       parseSims(rec["sims"]),
 	}
 }
 
@@ -175,14 +210,26 @@ func (s *Server) handleRegisterDevice(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handlePing updates a device heartbeat (last_seen_at + online status).
+type pingRequest struct {
+	Sims []simInfo `json:"sims"`
+}
+
+// handlePing updates a device heartbeat (last_seen_at + online status). The body
+// is optional; when it carries a "sims" list, the device's advertised SIM slots
+// are refreshed so callers know which slots they can target.
 func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 	device := deviceFromCtx(r.Context())
 	now := time.Now().UTC().Format("2006-01-02 15:04:05.000Z")
-	_, err := s.pb.Update(r.Context(), colDevices, asString(device["id"]), pb.Record{
+	fields := pb.Record{
 		"status":       "online",
 		"last_seen_at": now,
-	})
+	}
+	// Best-effort: an empty/absent body just means a plain heartbeat.
+	var req pingRequest
+	if decodeJSON(r, &req) == nil && req.Sims != nil {
+		fields["sims"] = req.Sims
+	}
+	_, err := s.pb.Update(r.Context(), colDevices, asString(device["id"]), fields)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return

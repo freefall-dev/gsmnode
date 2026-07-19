@@ -5,7 +5,45 @@ class IncomingSms {
   final String from;
   final String body;
   final DateTime timestamp;
-  IncomingSms(this.from, this.body, this.timestamp);
+
+  /// 0-based physical SIM slot the message arrived on, or null if the device
+  /// couldn't attribute it (single-SIM, or READ_PHONE_STATE not granted).
+  final int? simSlot;
+
+  IncomingSms(this.from, this.body, this.timestamp, {this.simSlot});
+}
+
+/// A SIM card active in the device, as enumerated by the native side.
+class SimInfo {
+  final int slot; // 0-based physical slot index
+  final int subscriptionId;
+  final String carrier;
+  final String number;
+  final String displayName;
+
+  SimInfo({
+    required this.slot,
+    required this.subscriptionId,
+    required this.carrier,
+    required this.number,
+    required this.displayName,
+  });
+
+  factory SimInfo.fromMap(Map<dynamic, dynamic> m) => SimInfo(
+        slot: (m['slot'] as num?)?.toInt() ?? 0,
+        subscriptionId: (m['subscription_id'] as num?)?.toInt() ?? 0,
+        carrier: m['carrier'] as String? ?? '',
+        number: m['number'] as String? ?? '',
+        displayName: m['display_name'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'slot': slot,
+        'subscription_id': subscriptionId,
+        'carrier': carrier,
+        'number': number,
+        'display_name': displayName,
+      };
 }
 
 /// A send/delivery status report for an outbound message.
@@ -37,6 +75,16 @@ class SmsService {
     });
   }
 
+  /// Enumerates the active SIMs on the device (empty if READ_PHONE_STATE isn't
+  /// granted or the device has no telephony).
+  Future<List<SimInfo>> getSims() async {
+    final res = await _method.invokeMethod('getSims');
+    final list = (res as List?) ?? const [];
+    return list
+        .map((e) => SimInfo.fromMap(e as Map))
+        .toList(growable: false);
+  }
+
   /// Places a phone call to [phoneNumber] via the native dialer (ACTION_CALL).
   /// Requires the CALL_PHONE permission. Throws [PlatformException] on failure.
   Future<void> placeCall(String phoneNumber) async {
@@ -54,10 +102,12 @@ class SmsService {
     return _events.receiveBroadcastStream().map((event) {
       final map = Map<String, dynamic>.from(event as Map);
       final ts = map['timestamp'] as int?;
+      final slot = (map['simSlot'] as num?)?.toInt();
       return IncomingSms(
         map['from'] as String? ?? '',
         map['body'] as String? ?? '',
         ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : DateTime.now(),
+        simSlot: (slot != null && slot >= 0) ? slot : null,
       );
     });
   }

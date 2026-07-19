@@ -91,6 +91,7 @@ function definitions(ids) {
         f.text("auth_token", { required: true }),
         f.select("status", ["online", "offline"]),
         f.date("last_seen_at"),
+        f.json("sims"), // [{slot, subscription_id, carrier, number, display_name}]
         f.relation("owner", ids.users, { required: true, cascadeDelete: true }),
         f.autodate("created", { onCreate: true, onUpdate: false }),
         f.autodate("updated", { onCreate: true, onUpdate: true }),
@@ -132,6 +133,7 @@ function definitions(ids) {
         f.text("phone_number", { required: true }),
         f.text("message"),
         f.date("received_at"),
+        f.number("sim_slot"), // 0-based SIM slot the message arrived on
         f.relation("device", ids.devices, { cascadeDelete: false }),
         f.relation("owner", ids.users, { required: true, cascadeDelete: true }),
         f.autodate("created", { onCreate: true, onUpdate: false }),

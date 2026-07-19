@@ -113,6 +113,19 @@ android_overlay/            native Android files to copy after `flutter create`
   PendingIntents; `SmsStatusReceiver` forwards the outcome (tagged with the
   message id) to Dart, which reports `Delivered`/`Failed` to the API Server.
 
+## Multiple SIM cards
+
+On dual-SIM devices the app enumerates the active SIMs (needs `READ_PHONE_STATE`,
+covered by the phone permission group) and reports them to the server on each
+heartbeat, so the Web App / API can offer real slot choices.
+
+- **Sending on a specific SIM:** the pulled message's `sim_number` (0-based slot)
+  selects the SIM. If that slot has no active subscription, the send is
+  **rejected** and reported `Failed` rather than silently using the default SIM.
+  A message with no `sim_number` uses the device's default SIM.
+- **Incoming SMS:** the receiver records which slot a message arrived on and
+  forwards it as `sim_slot` to the inbox.
+
 ## Known next steps (not yet implemented)
 
 - **Survive full task removal / long Doze**: the foreground service covers

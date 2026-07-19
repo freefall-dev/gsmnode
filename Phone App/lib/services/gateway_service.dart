@@ -59,7 +59,23 @@ class GatewayService extends ChangeNotifier {
     _pingTimer = Timer.periodic(AppConfig.pingInterval, (_) => _ping());
     _poll();
     _ping();
+    _logSims();
     notifyListeners();
+  }
+
+  /// Logs the detected SIMs once (best-effort; enumeration needs the phone
+  /// permission, which may still be pending when the gateway first starts).
+  Future<void> _logSims() async {
+    try {
+      final sims = await sms.getSims();
+      if (sims.isEmpty) return;
+      final desc = sims
+          .map((s) => 'slot ${s.slot}: ${s.carrier.isEmpty ? "SIM" : s.carrier}')
+          .join(', ');
+      _log0('SIMs detected — $desc');
+    } catch (_) {
+      // SIM enumeration unsupported or permission not granted; ignore.
+    }
   }
 
   void stop() {
@@ -113,7 +129,19 @@ class GatewayService extends ChangeNotifier {
   Future<void> _ping() async {
     if (!_running) return;
     try {
-      await api.ping();
+      // Report the current SIMs alongside the heartbeat so the server can
+      // advertise real slot choices. Only send when we actually have them, so a
+      // pending permission doesn't clobber a previously reported list.
+      List<Map<String, dynamic>>? sims;
+      try {
+        final list = await sms.getSims();
+        if (list.isNotEmpty) {
+          sims = list.map((s) => s.toJson()).toList(growable: false);
+        }
+      } catch (_) {
+        // SIM enumeration unsupported or permission not granted; skip.
+      }
+      await api.ping(sims: sims);
     } catch (e) {
       _log0('Ping failed: $e', error: true);
     }
@@ -141,9 +169,11 @@ class GatewayService extends ChangeNotifier {
   }
 
   Future<void> _onIncoming(IncomingSms msg) async {
-    _log0('Received from ${msg.from}: "${_short(msg.body)}"');
+    final on = msg.simSlot != null ? ' on SIM ${msg.simSlot}' : '';
+    _log0('Received from ${msg.from}$on: "${_short(msg.body)}"');
     try {
-      await api.postInbox(msg.from, msg.body, receivedAt: msg.timestamp);
+      await api.postInbox(msg.from, msg.body,
+          receivedAt: msg.timestamp, simSlot: msg.simSlot);
     } catch (e) {
       _log0('Forward inbox failed: $e', error: true);
     }

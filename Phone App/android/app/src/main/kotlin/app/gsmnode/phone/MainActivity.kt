@@ -51,6 +51,13 @@ class MainActivity : FlutterActivity() {
                         result.error("SEND_FAILED", e.message, null)
                     }
                 }
+                "getSims" -> {
+                    try {
+                        result.success(listSims())
+                    } catch (e: Exception) {
+                        result.error("SIM_LIST_FAILED", e.message, null)
+                    }
+                }
                 "placeCall" -> {
                     val phone = call.argument<String>("phone")
                     if (phone.isNullOrBlank()) {
@@ -97,29 +104,63 @@ class MainActivity : FlutterActivity() {
             })
     }
 
-    private fun smsManagerFor(simSlot: Int?): SmsManager {
-        if (simSlot == null) {
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-                getSystemService(SmsManager::class.java)
-            else
-                @Suppress("DEPRECATION") SmsManager.getDefault()
-        }
-        val hasPerm = ContextCompat.checkSelfPermission(
+    private fun hasPhoneStatePermission(): Boolean =
+        ContextCompat.checkSelfPermission(
             this, Manifest.permission.READ_PHONE_STATE
         ) == PackageManager.PERMISSION_GRANTED
-        if (hasPerm) {
-            val sm = getSystemService(SubscriptionManager::class.java)
-            val info = sm?.getActiveSubscriptionInfoForSimSlotIndex(simSlot)
-            if (info != null) {
-                return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-                    getSystemService(SmsManager::class.java)
-                        .createForSubscriptionId(info.subscriptionId)
-                else
-                    @Suppress("DEPRECATION")
-                    SmsManager.getSmsManagerForSubscriptionId(info.subscriptionId)
-            }
+
+    private fun defaultSmsManager(): SmsManager =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            getSystemService(SmsManager::class.java)
+        else
+            @Suppress("DEPRECATION") SmsManager.getDefault()
+
+    /// Resolves the SmsManager for a send. A null slot means "use the default
+    /// SIM". A non-null slot is honoured strictly: if the slot can't be targeted
+    /// (permission missing, or no active subscription in that slot) we throw
+    /// rather than silently falling back to the default SIM, so the caller learns
+    /// the message did NOT go out on the SIM it asked for.
+    private fun smsManagerFor(simSlot: Int?): SmsManager {
+        if (simSlot == null) return defaultSmsManager()
+        if (!hasPhoneStatePermission()) {
+            throw IllegalStateException(
+                "cannot target SIM slot $simSlot: READ_PHONE_STATE permission not granted")
         }
-        return smsManagerFor(null)
+        val sm = getSystemService(SubscriptionManager::class.java)
+            ?: throw IllegalStateException("SubscriptionManager unavailable on this device")
+        val info = sm.getActiveSubscriptionInfoForSimSlotIndex(simSlot)
+            ?: throw IllegalArgumentException("SIM slot $simSlot has no active subscription")
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            getSystemService(SmsManager::class.java)
+                .createForSubscriptionId(info.subscriptionId)
+        else
+            @Suppress("DEPRECATION")
+            SmsManager.getSmsManagerForSubscriptionId(info.subscriptionId)
+    }
+
+    /// Enumerates the active SIMs so the server/UI can present real slot choices
+    /// (carrier, number) instead of guessing at slot indices. Requires
+    /// READ_PHONE_STATE; returns an empty list when the permission isn't granted
+    /// yet or the device has no telephony.
+    private fun listSims(): List<Map<String, Any?>> {
+        if (!hasPhoneStatePermission()) return emptyList()
+        val sm = getSystemService(SubscriptionManager::class.java) ?: return emptyList()
+        val infos = try {
+            sm.activeSubscriptionInfoList
+        } catch (e: SecurityException) {
+            null
+        } ?: return emptyList()
+        return infos
+            .sortedBy { it.simSlotIndex }
+            .map { info ->
+                mapOf(
+                    "slot" to info.simSlotIndex,
+                    "subscription_id" to info.subscriptionId,
+                    "carrier" to (info.carrierName?.toString() ?: ""),
+                    "number" to (info.number ?: ""),
+                    "display_name" to (info.displayName?.toString() ?: ""),
+                )
+            }
     }
 
     /// Builds a PendingIntent that, when fired by the radio, broadcasts the
