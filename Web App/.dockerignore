@@ -1,0 +1,17 @@
+# Keep the build context small and avoid leaking local artifacts/secrets.
+.env
+*.log
+*.exe
+*.exe~
+
+# Frontend deps + generated output — rebuilt inside the image.
+web/node_modules/
+web/dist/
+server/dist/
+
+# VCS / editor / tooling noise
+.git/
+.gitignore
+.claude/
+.vscode/
+.idea/

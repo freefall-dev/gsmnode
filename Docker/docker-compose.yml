@@ -1,0 +1,75 @@
+name: gsmnode
+
+# Full gsmnode stack: PocketBase (database) + API Server + Web App.
+# Traffic flow (browser): Web App BFF --/api--> API Server --> PocketBase.
+# Copy .env.example to .env and fill in the secrets before `docker compose up`.
+
+services:
+  pocketbase:
+    build:
+      context: ./pocketbase
+    image: gsmnode-pocketbase
+    container_name: gsmnode-pocketbase
+    restart: unless-stopped
+    environment:
+      # Superuser is created/updated on boot so the API Server can authenticate.
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:?set PB_ADMIN_EMAIL in .env}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:?set PB_ADMIN_PASSWORD in .env}"
+    volumes:
+      - pb_data:/pb/pb_data
+    ports:
+      # Admin UI / API exposed on the host for management (http://host:8070/_/).
+      - "${PB_PORT:-8070}:8070"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8070/api/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  api-server:
+    build:
+      context: ../API Server
+    image: gsmnode-api
+    container_name: gsmnode-api
+    restart: unless-stopped
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    environment:
+      API_ADDR: ":8080"
+      # Reach PocketBase by its service name on the internal network.
+      POCKETBASE_URL: "http://pocketbase:8070"
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD}"
+      # Secret used to sign client JWTs — set a long random string in production.
+      JWT_SECRET: "${JWT_SECRET:-dev-insecure-change-me-please}"
+      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
+      MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
+      # Same-origin requests go through the Web App BFF, so CORS is only needed
+      # if the browser ever calls the API Server directly. Default to the web origin.
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:8090}"
+    ports:
+      # Optional direct access to the API Server (and its panel at /); the Web
+      # App reaches it over the internal network, not this host port.
+      - "${API_PORT:-8080}:8080"
+
+  web-app:
+    build:
+      context: ../Web App
+      args:
+        # Empty -> bundle uses same-origin "/api", which the BFF proxies below.
+        VITE_API_BASE: "${VITE_API_BASE:-}"
+    image: gsmnode-web
+    container_name: gsmnode-web
+    restart: unless-stopped
+    depends_on:
+      - api-server
+    environment:
+      # The BFF reverse-proxies /api/* to the API Server over the internal network.
+      API_BASE: "http://api-server:8080"
+    ports:
+      - "${WEB_PORT:-8090}:8090"
+
+volumes:
+  pb_data:

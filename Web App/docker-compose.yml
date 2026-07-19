@@ -1,0 +1,20 @@
+services:
+  web-app:
+    build:
+      context: .
+      args:
+        # Empty -> bundle uses same-origin "/api", which the BFF proxies below.
+        VITE_API_BASE: "${VITE_API_BASE:-}"
+    image: gsmnode-web
+    container_name: gsmnode-web
+    restart: unless-stopped
+    environment:
+      WEB_ADDR: ":8090"
+      # BFF target. host.docker.internal reaches the API Server published on the
+      # host (e.g. by API Server/docker-compose.yml or a local api-server.exe).
+      API_BASE: "${API_BASE:-http://host.docker.internal:8080}"
+    extra_hosts:
+      # Makes host.docker.internal resolve on Linux too (already works on Desktop).
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${WEB_PORT:-8090}:8090"

@@ -1,0 +1,78 @@
+name: gsmnode
+
+# Production gsmnode stack — pulls prebuilt images from the registry instead of
+# building from source. Everything an operator needs to set lives in .env.
+#
+#   1. cp .env.prod.example .env   (then edit it — all secrets/ports/volumes)
+#   2. docker compose -f docker-compose.prod.yml pull
+#   3. docker compose -f docker-compose.prod.yml up -d
+#
+# Traffic flow (browser): Web App BFF --/api--> API Server --> PocketBase.
+#
+# On first boot PocketBase upserts the superuser from PB_ADMIN_*, which the API
+# Server then uses to authenticate. The upsert is idempotent, so restarts and
+# upgrades are safe.
+
+services:
+  pocketbase:
+    image: "${PB_IMAGE:-10.2.1.10:5500/admin/gsmnode-pocketbase:latest}"
+    container_name: gsmnode-pocketbase
+    restart: unless-stopped
+    environment:
+      # The superuser is created/updated on boot (the API Server authenticates
+      # with it). This is the only place the first superuser can be created — the
+      # REST API cannot bootstrap it.
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:?set PB_ADMIN_EMAIL in .env}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:?set PB_ADMIN_PASSWORD in .env}"
+    volumes:
+      # Named volume by default; set PB_DATA to a host path in .env for a bind mount.
+      - "${PB_DATA:-pb_data}:/pb/pb_data"
+    ports:
+      # Bound to localhost by default — the admin UI (/_/) is reachable only on
+      # the host. Set PB_BIND=0.0.0.0 in .env to expose it on the network.
+      - "${PB_BIND:-127.0.0.1}:${PB_PORT:-8070}:8070"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8070/api/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  api-server:
+    image: "${API_IMAGE:-10.2.1.10:5500/admin/gsmnode-api-server:latest}"
+    container_name: gsmnode-api
+    restart: unless-stopped
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    environment:
+      API_ADDR: ":8080"
+      # Reach PocketBase by its service name on the internal network.
+      POCKETBASE_URL: "http://pocketbase:8070"
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD}"
+      # Secret used to sign client JWTs — REQUIRED in production (long random string).
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env}"
+      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
+      MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:8090}"
+    ports:
+      # Localhost-only by default (the Web App reaches it over the internal
+      # network). Set API_BIND=0.0.0.0 to expose the API panel on the network.
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
+
+  web-app:
+    image: "${WEB_IMAGE:-10.2.1.10:5500/admin/gsmnode-web-app:latest}"
+    container_name: gsmnode-web
+    restart: unless-stopped
+    depends_on:
+      - api-server
+    environment:
+      # The BFF reverse-proxies /api/* to the API Server over the internal network.
+      API_BASE: "http://api-server:8080"
+    ports:
+      # The public front door. Bound on all interfaces so browsers can reach it.
+      - "${WEB_PORT:-8090}:8090"
+
+volumes:
+  pb_data:

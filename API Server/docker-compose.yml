@@ -1,0 +1,26 @@
+services:
+  api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gsmnode-api
+    container_name: gsmnode-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      # Container always listens on :8080; map the host port above.
+      API_ADDR: ":8080"
+      # External PocketBase instance (all DB access goes through this server).
+      POCKETBASE_URL: "${POCKETBASE_URL:-http://10.2.1.10:8028}"
+      # Superuser service account used to reach PocketBase. Without these the
+      # server still starts, but PocketBase calls fail.
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD}"
+      # Secret used to sign client JWTs — set a long random string in production.
+      JWT_SECRET: "${JWT_SECRET:-dev-insecure-change-me-please}"
+      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
+      # How long a message/call may stay unprocessed before it's marked Failed.
+      MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
+      # Browser origins allowed by CORS (native apps are exempt).
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:5173}"

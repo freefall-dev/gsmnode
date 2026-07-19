@@ -1,0 +1,7 @@
+# Shell scripts must keep LF endings — they run inside Linux containers, where
+# CRLF would break the shebang and `set -e` parsing.
+*.sh text eol=lf
+
+# Docker entrypoints / configs consumed by Linux tooling.
+Dockerfile text eol=lf
+.dockerignore text eol=lf

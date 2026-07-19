@@ -1,0 +1,18 @@
+# Keep the build context small and avoid leaking local artifacts/secrets.
+.env
+*.log
+*.exe
+*.exe~
+bin/
+tmp/
+
+# Panel source & tooling — the built output in internal/api/dist is committed
+# and embedded at compile time, so the source tree is not needed in the image.
+panel/node_modules/
+panel/dist/
+
+# VCS / editor noise
+.git/
+.gitignore
+.vscode/
+.idea/

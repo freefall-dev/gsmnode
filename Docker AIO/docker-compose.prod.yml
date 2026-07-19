@@ -1,0 +1,38 @@
+name: gsmnode-aio
+
+# Production all-in-one — pulls the prebuilt image from the registry instead of
+# building. One container runs PocketBase + API Server + Web App (nginx).
+# Everything an operator needs to set lives in .env.
+#
+#   1. cp .env.prod.example .env   (then edit it)
+#   2. docker compose -f docker-compose.prod.yml pull
+#   3. docker compose -f docker-compose.prod.yml up -d
+#
+# On first boot PocketBase upserts the superuser from PB_ADMIN_*, which the API
+# Server then uses to authenticate. The upsert is idempotent.
+
+services:
+  gsmnode:
+    image: "${AIO_IMAGE:-10.2.1.10:5500/admin/gsmnode-aio:latest}"
+    container_name: gsmnode-aio
+    restart: unless-stopped
+    environment:
+      # Superuser (also used by the API Server to authenticate to PocketBase).
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:?set PB_ADMIN_EMAIL in .env}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:?set PB_ADMIN_PASSWORD in .env}"
+      # Secret used to sign client JWTs. REQUIRED — use a long random string.
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env}"
+      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
+      MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
+      # Match CORS to the web origin (only used if a browser calls the API directly).
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:8090}"
+    ports:
+      - "${WEB_PORT:-8090}:80"    # Web App
+      - "${PB_PORT:-8070}:8070"   # PocketBase admin UI / API
+      - "${API_PORT:-8080}:8080"  # API Server + embedded API web panel (root /)
+    volumes:
+      # Named volume by default; set PB_DATA to a host path in .env for a bind mount.
+      - "${PB_DATA:-pb_data}:/pb/pb_data"
+
+volumes:
+  pb_data:
