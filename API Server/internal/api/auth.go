@@ -23,6 +23,7 @@ type callerIdentity struct {
 	Email string
 	Name  string
 	Role  string
+	OrgID string // organization record id ("" = none); scopes what an admin manages
 }
 
 func (c *callerIdentity) isSuperadmin() bool { return c != nil && c.Role == roleSuperadmin }
@@ -59,6 +60,7 @@ func (s *Server) identify(ctx context.Context, token string) (*callerIdentity, i
 		Email: asString(rec["email"]),
 		Name:  asString(rec["name"]),
 		Role:  role,
+		OrgID: asString(rec["organization"]),
 	}, http.StatusOK, nil
 }
 
@@ -139,10 +141,11 @@ type loginRequest struct {
 
 // userDTO is the compact identity shape embedded in auth responses.
 type userDTO struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name,omitempty"`
-	Role  string `json:"role"`
+	ID           string `json:"id"`
+	Email        string `json:"email"`
+	Name         string `json:"name,omitempty"`
+	Role         string `json:"role"`
+	Organization string `json:"organization,omitempty"` // org record id, so the panel can default an admin's actions to their own org
 }
 
 // handleLogin authenticates against the PocketBase users collection and returns
@@ -202,7 +205,7 @@ func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"valid": false})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"valid": true, "user": userDTO{ID: who.ID, Email: who.Email, Name: who.Name, Role: who.Role}})
+	writeJSON(w, http.StatusOK, map[string]any{"valid": true, "user": userDTO{ID: who.ID, Email: who.Email, Name: who.Name, Role: who.Role, Organization: who.OrgID}})
 }
 
 // handleRefresh exchanges a still-valid token for a fresh PocketBase token,
@@ -239,7 +242,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "not authenticated")
 		return
 	}
-	writeJSON(w, http.StatusOK, userDTO{ID: who.ID, Email: who.Email, Name: who.Name, Role: who.Role})
+	writeJSON(w, http.StatusOK, userDTO{ID: who.ID, Email: who.Email, Name: who.Name, Role: who.Role, Organization: who.OrgID})
 }
 
 // recordToUser projects a PocketBase user record to the compact identity shape.
@@ -249,9 +252,10 @@ func recordToUser(rec pb.Record) userDTO {
 		role = roleUser
 	}
 	return userDTO{
-		ID:    asString(rec["id"]),
-		Email: asString(rec["email"]),
-		Name:  asString(rec["name"]),
-		Role:  role,
+		ID:           asString(rec["id"]),
+		Email:        asString(rec["email"]),
+		Name:         asString(rec["name"]),
+		Role:         role,
+		Organization: asString(rec["organization"]),
 	}
 }

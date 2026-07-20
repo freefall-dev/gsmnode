@@ -3,9 +3,11 @@ import { ref, onMounted, computed } from "vue";
 import { request, me, isSuperadmin } from "../api";
 
 // Manager-only. A superadmin sees and edits everyone including other
-// superadmins; an admin may manage users and admins but not superadmins. The UI
-// mirrors those limits, but the server is what enforces them.
+// superadmins and may move users between organizations; an admin manages only
+// their own organization's members and cannot touch superadmins. The UI mirrors
+// those limits, but the server is what enforces them.
 const users = ref([]);
+const orgs = ref([]);
 const error = ref("");
 const busy = ref(false);
 const editing = ref(null); // user id being edited, or "new"
@@ -17,8 +19,9 @@ const roles = computed(() =>
 
 async function load() {
   try {
-    const u = await request("/api/users");
+    const [u, o] = await Promise.all([request("/api/users"), request("/api/orgs")]);
     users.value = u.users || [];
+    orgs.value = o.organizations || [];
     error.value = "";
   } catch (e) {
     error.value = e.message;
@@ -28,12 +31,25 @@ onMounted(load);
 
 function startNew() {
   editing.value = "new";
-  draft.value = { email: "", name: "", password: "", role: "user" };
+  draft.value = {
+    email: "",
+    name: "",
+    password: "",
+    role: "user",
+    // A superadmin picks the org; an admin's new users land in the admin's own org.
+    organization: isSuperadmin.value ? "" : me.value?.organization || "",
+  };
 }
 
 function startEdit(u) {
   editing.value = u.id;
-  draft.value = { email: u.email, name: u.name || "", password: "", role: u.role };
+  draft.value = {
+    email: u.email,
+    name: u.name || "",
+    password: "",
+    role: u.role,
+    organization: u.organization || "",
+  };
 }
 
 function cancel() {
@@ -129,6 +145,13 @@ const roleClass = (r) =>
             <option v-for="r in roles" :key="r" :value="r">{{ r }}</option>
           </select>
         </div>
+        <div v-if="isSuperadmin">
+          <label class="mb-1 block text-xs font-medium text-secondary">Organization</label>
+          <select v-model="draft.organization" class="gn-input">
+            <option value="">None</option>
+            <option v-for="o in orgs" :key="o.id" :value="o.id">{{ o.name }}</option>
+          </select>
+        </div>
       </div>
       <div class="mt-3 flex items-center gap-2">
         <button class="gn-btn-pri gn-btn-sm" :disabled="busy" @click="save">
@@ -146,6 +169,7 @@ const roleClass = (r) =>
           <th class="px-5 py-2.5 font-medium">Email</th>
           <th class="px-5 py-2.5 font-medium">Name</th>
           <th class="px-5 py-2.5 font-medium">Role</th>
+          <th class="px-5 py-2.5 font-medium">Organization</th>
           <th></th>
         </tr>
       </thead>
@@ -159,6 +183,7 @@ const roleClass = (r) =>
           <td class="px-5 py-2.5">
             <span class="inline-flex rounded-sm px-2 py-0.5 font-mono text-xs font-medium" :class="roleClass(u.role)">{{ u.role }}</span>
           </td>
+          <td class="px-5 py-2.5 text-secondary">{{ u.organizationName || "—" }}</td>
           <td class="px-5 py-2.5 text-right whitespace-nowrap">
             <button v-if="canManage(u)" class="gn-btn-sec gn-btn-sm" @click="startEdit(u)">Edit</button>
             <button

@@ -156,21 +156,39 @@ function definitions(ids) {
   ];
 }
 
-// The API Server gates the panel and management endpoints on a users.role
-// select field (user | admin | superadmin). It is added to the existing auth
-// collection by appending to its current fields, so the built-in email/password
-// system fields are preserved. Idempotent: a no-op once role exists.
-async function ensureUsersRole(users) {
-  if ((users.fields || []).some((fld) => fld.name === "role")) {
-    console.log('Collection "users" already has a role field.');
+// The tenants users belong to. A superadmin spans all of them; an admin manages
+// only their own. Names are unique so the API can rely on PocketBase rejecting a
+// duplicate. Superuser-locked like every other collection.
+const orgDefinition = {
+  name: "organizations",
+  type: "base",
+  ...LOCKED,
+  fields: [
+    f.text("name", { required: true }),
+    f.autodate("created", { onCreate: true, onUpdate: false }),
+  ],
+  indexes: ["CREATE UNIQUE INDEX idx_organizations_name ON organizations (name)"],
+};
+
+// The API Server gates the panel and management endpoints on a users.role select
+// field (user | admin | superadmin) and scopes admins by a users.organization
+// relation. Both are appended to the existing auth collection, preserving the
+// built-in email/password system fields. Idempotent: a no-op once both exist.
+async function ensureUserFields(users, orgCollectionId) {
+  const have = new Set((users.fields || []).map((fld) => fld.name));
+  const additions = [];
+  if (!have.has("role")) {
+    additions.push({ name: "role", type: "select", required: false, maxSelect: 1, values: ["user", "admin", "superadmin"] });
+  }
+  if (!have.has("organization")) {
+    additions.push(f.relation("organization", orgCollectionId));
+  }
+  if (additions.length === 0) {
+    console.log('Collection "users" already has role + organization fields.');
     return;
   }
-  const fields = [
-    ...users.fields,
-    { name: "role", type: "select", required: false, maxSelect: 1, values: ["user", "admin", "superadmin"] },
-  ];
-  await api("PATCH", `/api/collections/${users.id}`, { fields });
-  console.log('Added role field to "users" collection.');
+  await api("PATCH", `/api/collections/${users.id}`, { fields: [...users.fields, ...additions] });
+  console.log(`Added to "users": ${additions.map((a) => a.name).join(", ")}.`);
 }
 
 async function main() {
@@ -180,7 +198,19 @@ async function main() {
   if (!collections.users) {
     throw new Error('The default "users" auth collection was not found in PocketBase.');
   }
-  await ensureUsersRole(collections.users);
+
+  // Organizations must exist before users can reference it, so reconcile it
+  // first, then refresh so its id is available for the relation field.
+  if (collections.organizations) {
+    await api("PATCH", `/api/collections/${collections.organizations.id}`, orgDefinition);
+    console.log("Updated collection: organizations");
+  } else {
+    await api("POST", "/api/collections", orgDefinition);
+    console.log("Created collection: organizations");
+  }
+  collections = await getCollections();
+
+  await ensureUserFields(collections.users, collections.organizations.id);
 
   // Resolve collection ids needed for relation fields. devices must exist before
   // messages/inbox/webhooks reference it, so create in order, refreshing ids.
@@ -203,7 +233,7 @@ async function main() {
   }
 
   console.log("\nPocketBase setup complete.");
-  console.log("Collections: users (existing), devices, messages, inbox, webhooks.");
+  console.log("Collections: users (existing), organizations, devices, messages, inbox, webhooks.");
   console.log("\nNext: create a user to log in with, e.g. via the PocketBase admin UI,");
   console.log("or run scripts/create-user.mjs.");
 }

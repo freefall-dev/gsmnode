@@ -14,14 +14,15 @@ var EnvFile = ".env"
 
 // Config holds all runtime configuration for the API Server.
 type Config struct {
-	Addr           string
-	PocketBaseURL  string
-	PBAdminEmail   string
-	PBAdminPass    string
-	JWTSecret      []byte
-	JWTAccessTTL   time.Duration
-	AllowOrigins   []string
-	MessageTTL     time.Duration
+	Addr          string
+	PocketBaseURL string
+	PBAdminEmail  string
+	PBAdminPass   string
+	JWTSecret     []byte
+	JWTAccessTTL  time.Duration
+	WebAppURL     string
+	AllowOrigins  []string
+	MessageTTL    time.Duration
 }
 
 // Load reads configuration from environment variables, applying sensible
@@ -36,6 +37,7 @@ func Load() Config {
 		PBAdminPass:   getenv("PB_ADMIN_PASSWORD", ""),
 		JWTSecret:     []byte(getenv("JWT_SECRET", "dev-insecure-change-me-please")),
 		JWTAccessTTL:  getdur("JWT_ACCESS_TTL", 24*time.Hour),
+		WebAppURL:     strings.TrimRight(getenv("WEBAPP_URL", "http://localhost:8090"), "/"),
 		AllowOrigins:  splitCSV(getenv("CORS_ALLOW_ORIGINS", "*")),
 		MessageTTL:    getdur("MESSAGE_TTL", 5*time.Minute),
 	}

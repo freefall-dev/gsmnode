@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -48,12 +49,22 @@ func probe(ctx context.Context, url string) svcHealth {
 	return h
 }
 
-// handleStatus reports the health of this server and PocketBase. PocketBase is
-// probed server-side, so the browser never has to reach it directly.
+// handleStatus reports the health of this server and its neighbours (PocketBase
+// and the Web App). Both are probed server-side and in parallel, so the browser
+// never has to reach either directly and a slow upstream doesn't add to a fast
+// one's latency.
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	pbURL, _, _ := s.pbSettings()
+	var pbHealth, web svcHealth
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); pbHealth = probe(r.Context(), pbURL+"/api/health") }()
+	go func() { defer wg.Done(); web = probe(r.Context(), s.webAppURL()+"/healthz") }()
+	wg.Wait()
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"apiServer":  svcHealth{Status: "ok"},
-		"pocketBase": probe(r.Context(), pbURL+"/api/health"),
+		"pocketBase": pbHealth,
+		"webApp":     web,
 	})
 }
