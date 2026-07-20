@@ -45,7 +45,7 @@ async function makeCall() {
 </script>
 
 <template>
-  <div class="max-w-2xl">
+  <div>
     <PageHeader title="Make a call" subtitle="Tell a device to place an outbound phone call" />
 
     <form class="rounded-lg border border-subtle bg-card shadow-sm" @submit.prevent="makeCall">

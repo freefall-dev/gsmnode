@@ -59,7 +59,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="max-w-3xl">
+  <div>
     <PageHeader title="Webhooks" subtitle="Get notified when messages change state or arrive" />
 
     <form

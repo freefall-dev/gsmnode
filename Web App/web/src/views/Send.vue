@@ -69,7 +69,7 @@ async function send() {
 </script>
 
 <template>
-  <div class="max-w-2xl">
+  <div>
     <PageHeader title="Send SMS" subtitle="Queue an outbound message for a device" />
 
     <form class="rounded-lg border border-subtle bg-card shadow-sm" @submit.prevent="send">

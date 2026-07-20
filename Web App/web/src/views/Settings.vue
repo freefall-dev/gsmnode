@@ -112,7 +112,7 @@ const roleLabel = computed(() => {
 </script>
 
 <template>
-  <div class="max-w-3xl">
+  <div>
     <PageHeader title="Settings" subtitle="Manage your account and appearance" />
 
     <!-- Account -->
