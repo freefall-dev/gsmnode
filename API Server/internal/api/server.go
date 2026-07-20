@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"smsgateway/apiserver/internal/config"
@@ -14,6 +15,7 @@ import (
 // Collection names in PocketBase.
 const (
 	colUsers    = "users"
+	colOrgs     = "organizations"
 	colDevices  = "devices"
 	colMessages = "messages"
 	colInbox    = "inbox"
@@ -22,6 +24,7 @@ const (
 
 // Server wires together the HTTP handlers and their dependencies.
 type Server struct {
+	mu  sync.RWMutex // guards the mutable Web App URL + CORS origins in cfg
 	cfg config.Config
 	pb  *pb.Client
 }
@@ -39,6 +42,29 @@ func (s *Server) pbSettings() (url, adminEmail, adminPassword string) {
 // setPBConfig retargets the PocketBase connection at runtime.
 func (s *Server) setPBConfig(url, adminEmail, adminPassword string) {
 	s.pb.SetConfig(url, adminEmail, adminPassword)
+}
+
+// webAppURL returns the Web App address probed by /api/status.
+func (s *Server) webAppURL() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.WebAppURL
+}
+
+// webAppSettings snapshots the Web App settings for the settings endpoints.
+func (s *Server) webAppSettings() (url string, allowOrigins []string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.WebAppURL, append([]string(nil), s.cfg.AllowOrigins...)
+}
+
+// setWebAppConfig applies new Web App settings at runtime. The CORS middleware
+// reads the origin list per request, so the new list is live immediately.
+func (s *Server) setWebAppConfig(url string, allowOrigins []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfg.WebAppURL = url
+	s.cfg.AllowOrigins = append([]string(nil), allowOrigins...)
 }
 
 // Handler returns the root HTTP handler with all routes registered.
@@ -73,11 +99,25 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/users/{id}", s.requireManager(s.handleUpdateUser))
 	mux.HandleFunc("DELETE /api/users/{id}", s.requireManager(s.handleDeleteUser))
 
+	// Organizations — the tenants users belong to. Listing is manager-scoped (an
+	// admin sees only their own org); create/rename/delete are superadmin-only
+	// (a superadmin spans every organization).
+	mux.HandleFunc("GET /api/orgs", s.requireManager(s.handleListOrgs))
+	mux.HandleFunc("POST /api/orgs", s.requireSuperadmin(s.handleCreateOrg))
+	mux.HandleFunc("PATCH /api/orgs/{id}", s.requireSuperadmin(s.handleUpdateOrg))
+	mux.HandleFunc("DELETE /api/orgs/{id}", s.requireSuperadmin(s.handleDeleteOrg))
+
 	// PocketBase connection settings — superadmin only. These do NOT require the
 	// service account to already be configured (they exist to configure it).
 	mux.HandleFunc("GET /api/admin/pb-config", s.requireSuperadminAuth(s.handleGetPBConfig))
 	mux.HandleFunc("POST /api/admin/pb-config/test", s.requireSuperadminAuth(s.handleTestPBConfig))
 	mux.HandleFunc("PUT /api/admin/pb-config", s.requireSuperadminAuth(s.handleUpdatePBConfig))
+
+	// Web App settings — superadmin only. Where the Web App lives (probed by
+	// /api/status) and which browser origins CORS admits.
+	mux.HandleFunc("GET /api/admin/webapp-config", s.requireSuperadminAuth(s.handleGetWebAppConfig))
+	mux.HandleFunc("POST /api/admin/webapp-config/test", s.requireSuperadminAuth(s.handleTestWebAppConfig))
+	mux.HandleFunc("PUT /api/admin/webapp-config", s.requireSuperadminAuth(s.handleUpdateWebAppConfig))
 
 	mux.HandleFunc("GET /api/devices", s.requireUser(s.handleListDevices))
 	mux.HandleFunc("DELETE /api/devices/{id}", s.requireUser(s.handleDeleteDevice))
@@ -132,26 +172,37 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) cors(next http.Handler) http.Handler {
-	allowed := map[string]bool{}
-	wildcard := false
+// originAllowed reports whether origin may call this server, and whether it was
+// the wildcard that allowed it. The allow-list is consulted per request rather
+// than captured once, so editing it from the panel takes effect without a
+// restart.
+func (s *Server) originAllowed(origin string) (allowed, wildcard bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	for _, o := range s.cfg.AllowOrigins {
 		if o == "*" {
-			wildcard = true
+			return true, true
 		}
-		allowed[o] = true
+		if o == origin {
+			allowed = true
+		}
 	}
+	return allowed, false
+}
+
+func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" && (wildcard || allowed[origin]) {
-			if wildcard {
-				w.Header().Set("Access-Control-Allow-Origin", "*")
-			} else {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Add("Vary", "Origin")
+		if origin := r.Header.Get("Origin"); origin != "" {
+			if allowed, wildcard := s.originAllowed(origin); allowed {
+				if wildcard {
+					w.Header().Set("Access-Control-Allow-Origin", "*")
+				} else {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Add("Vary", "Origin")
+				}
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 			}
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

@@ -155,3 +155,103 @@ func (s *Server) handleUpdatePBConfig(w http.ResponseWriter, r *http.Request) {
 		"config": viewFor(r.Context(), url, email, password),
 	})
 }
+
+// webAppConfigView is the Web App shape returned to the panel: where the Web App
+// lives (the address /api/status probes) and which browser origins CORS lets
+// call this server.
+type webAppConfigView struct {
+	URL          string    `json:"url"`
+	AllowOrigins []string  `json:"allowOrigins"`
+	Probe        svcHealth `json:"probe"`
+}
+
+// webAppViewFor builds the panel's Web App view, including a live probe.
+func webAppViewFor(ctx context.Context, url string, origins []string) webAppConfigView {
+	return webAppConfigView{
+		URL:          url,
+		AllowOrigins: origins,
+		Probe:        probe(ctx, url+"/healthz"),
+	}
+}
+
+// GET /api/admin/webapp-config — current Web App settings + a live probe.
+func (s *Server) handleGetWebAppConfig(w http.ResponseWriter, r *http.Request) {
+	url, origins := s.webAppSettings()
+	writeJSON(w, http.StatusOK, webAppViewFor(r.Context(), url, origins))
+}
+
+// webAppConfigBody is the editable Web App payload. A blank url means "keep the
+// current one"; allowOrigins is taken as sent (it is a complete list, not a
+// patch), so it may only be omitted, never emptied.
+type webAppConfigBody struct {
+	URL          string   `json:"url"`
+	AllowOrigins []string `json:"allowOrigins"`
+}
+
+// POST /api/admin/webapp-config/test — probe a candidate Web App address WITHOUT
+// applying it. CORS origins are not probeable, so this only checks the URL.
+func (s *Server) handleTestWebAppConfig(w http.ResponseWriter, r *http.Request) {
+	var b webAppConfigBody
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	url := normalizeURL(b.URL)
+	if url == "" {
+		url, _ = s.webAppSettings()
+	}
+	writeJSON(w, http.StatusOK, probe(r.Context(), url+"/healthz"))
+}
+
+// PUT /api/admin/webapp-config — apply new Web App settings at runtime and
+// persist them to .env. The CORS middleware re-reads the origin list on every
+// request, so a change here takes effect without a restart.
+func (s *Server) handleUpdateWebAppConfig(w http.ResponseWriter, r *http.Request) {
+	var b webAppConfigBody
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	url := normalizeURL(b.URL)
+	if url == "" {
+		writeError(w, http.StatusBadRequest, "a Web App URL is required")
+		return
+	}
+	origins := cleanOrigins(b.AllowOrigins)
+	if len(origins) == 0 {
+		writeError(w, http.StatusBadRequest, "at least one allowed origin is required (use * for any)")
+		return
+	}
+
+	// Apply at runtime, then persist so the change survives a restart.
+	s.setWebAppConfig(url, origins)
+	if err := config.UpdateEnvFile(config.EnvFile, map[string]string{
+		"WEBAPP_URL":         url,
+		"CORS_ALLOW_ORIGINS": strings.Join(origins, ","),
+	}); err != nil {
+		// The runtime change already took effect; report that persistence failed.
+		log.Printf("webapp-config: persist to %s failed: %v", config.EnvFile, err)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"config":  webAppViewFor(r.Context(), url, origins),
+			"warning": "applied for this session, but could not be saved to .env: " + err.Error(),
+		})
+		return
+	}
+
+	log.Printf("webapp-config: Web App updated to %s, origins %s (by superadmin)", url, strings.Join(origins, ","))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"config": webAppViewFor(r.Context(), url, origins),
+	})
+}
+
+// cleanOrigins trims each origin and drops the blanks, so a trailing comma or a
+// stray space in the panel's text field can't register an unmatchable origin.
+func cleanOrigins(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, o := range in {
+		if o = strings.TrimSpace(o); o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
+}

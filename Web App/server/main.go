@@ -55,6 +55,12 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", proxy)
+	// Liveness probe. The API Server's /api/status polls this to show the Web
+	// App's health on its overview, so keep it cheap — no SPA/index round-trip.
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok","service":"gsmnode-web"}`))
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Serve static assets when they exist; otherwise fall back to index.html
 		// so client-side routing works on deep links.

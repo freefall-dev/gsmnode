@@ -6,7 +6,9 @@ import { me, token, restore, logout, isManager, isSuperadmin } from "./api";
 import LoginView from "./components/LoginView.vue";
 import StatusCard from "./components/StatusCard.vue";
 import UsersCard from "./components/UsersCard.vue";
+import OrgsCard from "./components/OrgsCard.vue";
 import PocketBaseCard from "./components/PocketBaseCard.vue";
+import WebAppCard from "./components/WebAppCard.vue";
 import EndpointTable from "./components/EndpointTable.vue";
 
 const booting = ref(true);
@@ -17,13 +19,20 @@ onMounted(async () => {
   booting.value = false;
 });
 
-// Sections are gated by role: user management needs a manager, PocketBase needs
-// a superadmin. The server enforces the same rules — this only hides what the
-// caller could not use anyway.
+// Sections are gated by role: user management needs a manager, PocketBase and
+// Web App settings need a superadmin. The server enforces the same rules — this
+// only hides what the caller could not use anyway.
 const sections = computed(() => {
   const out = [{ id: "overview", label: "Overview" }];
-  if (isManager.value) out.push({ id: "users", label: "Users" });
-  if (isSuperadmin.value) out.push({ id: "pocketbase", label: "PocketBase" });
+  if (isManager.value) {
+    out.push({ id: "users", label: "Users" }, { id: "orgs", label: "Organizations" });
+  }
+  if (isSuperadmin.value) {
+    out.push(
+      { id: "pocketbase", label: "PocketBase" },
+      { id: "webapp", label: "Web App" },
+    );
+  }
   out.push({ id: "api", label: "API" });
   return out;
 });
@@ -60,16 +69,23 @@ const clientApi = [
 ];
 
 const managementApi = [
-  { method: "GET", path: "/api/users", desc: "List users" },
+  { method: "GET", path: "/api/users", desc: "List users (admins see their own org)" },
   { method: "POST", path: "/api/users", desc: "Create a user" },
-  { method: "PATCH", path: "/api/users/{id}", desc: "Update email / name / role / password" },
+  { method: "PATCH", path: "/api/users/{id}", desc: "Update email / name / role / password / org" },
   { method: "DELETE", path: "/api/users/{id}", desc: "Delete a user" },
+  { method: "GET", path: "/api/orgs", desc: "List organizations (admins see their own)" },
 ];
 
 const superadminApi = [
   { method: "GET", path: "/api/admin/pb-config", desc: "PocketBase connection + live probe" },
   { method: "POST", path: "/api/admin/pb-config/test", desc: "Probe a candidate connection" },
   { method: "PUT", path: "/api/admin/pb-config", desc: "Apply + persist a connection" },
+  { method: "GET", path: "/api/admin/webapp-config", desc: "Web App URL + CORS origins, with a live probe" },
+  { method: "POST", path: "/api/admin/webapp-config/test", desc: "Probe a candidate Web App address" },
+  { method: "PUT", path: "/api/admin/webapp-config", desc: "Apply + persist Web App settings" },
+  { method: "POST", path: "/api/orgs", desc: "Create an organization" },
+  { method: "PATCH", path: "/api/orgs/{id}", desc: "Rename an organization" },
+  { method: "DELETE", path: "/api/orgs/{id}", desc: "Delete an organization (must be empty)" },
 ];
 
 const mobileApi = [
@@ -133,7 +149,9 @@ const mobileApi = [
 
       <StatusCard v-if="section === 'overview'" />
       <UsersCard v-else-if="section === 'users'" />
+      <OrgsCard v-else-if="section === 'orgs'" />
       <PocketBaseCard v-else-if="section === 'pocketbase'" />
+      <WebAppCard v-else-if="section === 'webapp'" />
 
       <template v-else-if="section === 'api'">
         <EndpointTable title="Auth" auth="Public / Bearer" :endpoints="authApi" />

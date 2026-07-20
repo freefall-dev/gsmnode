@@ -2,8 +2,8 @@
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import { request } from "../api";
 
-// /api/status probes PocketBase server-side, so the browser never has to reach
-// it directly.
+// /api/status probes PocketBase and the Web App server-side, so the browser
+// never has to reach either directly.
 const status = ref(null);
 const error = ref("");
 let timer = null;
@@ -21,6 +21,7 @@ async function check() {
 const rows = computed(() => [
   { key: "apiServer", label: "API Server", h: status.value?.apiServer },
   { key: "pocketBase", label: "PocketBase", h: status.value?.pocketBase },
+  { key: "webApp", label: "Web App", h: status.value?.webApp },
 ]);
 
 onMounted(() => {
