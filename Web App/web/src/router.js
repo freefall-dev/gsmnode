@@ -9,6 +9,7 @@ import Call from "./views/Call.vue";
 import Messages from "./views/Messages.vue";
 import Inbox from "./views/Inbox.vue";
 import Webhooks from "./views/Webhooks.vue";
+import Settings from "./views/Settings.vue";
 
 const routes = [
   { path: "/login", name: "login", component: Login },
@@ -24,6 +25,7 @@ const routes = [
       { path: "messages", name: "messages", component: Messages },
       { path: "inbox", name: "inbox", component: Inbox },
       { path: "webhooks", name: "webhooks", component: Webhooks },
+      { path: "settings", name: "settings", component: Settings },
     ],
   },
   { path: "/:pathMatch(.*)*", redirect: "/" },

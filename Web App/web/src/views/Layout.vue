@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Inbox,
   Webhook,
+  Settings,
   Moon,
   Sun,
   LogOut,
@@ -54,6 +55,15 @@ function logout() {
         >
           <component :is="item.icon" class="h-[18px] w-[18px]" />{{ item.label }}
         </RouterLink>
+
+        <div class="my-2 h-px bg-subtle"></div>
+        <RouterLink
+          :to="{ name: 'settings' }"
+          class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-secondary transition-colors hover:bg-sunken hover:text-primary"
+          active-class="!bg-brand-tint !text-brand-active"
+        >
+          <Settings class="h-[18px] w-[18px]" />Settings
+        </RouterLink>
       </nav>
       <div class="border-t border-subtle px-5 py-4">
         <ApiStatus />
@@ -72,6 +82,11 @@ function logout() {
             class="rounded-sm px-2 py-1 text-xs font-medium whitespace-nowrap text-secondary"
             active-class="!bg-brand-tint !text-brand-active"
           >{{ item.label }}</RouterLink>
+          <RouterLink
+            :to="{ name: 'settings' }"
+            class="rounded-sm px-2 py-1 text-xs font-medium whitespace-nowrap text-secondary"
+            active-class="!bg-brand-tint !text-brand-active"
+          >Settings</RouterLink>
         </nav>
         <div class="hidden sm:block"></div>
         <div class="flex items-center gap-3 text-sm">

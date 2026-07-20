@@ -24,6 +24,15 @@ export const auth = {
     return res.user;
   },
 
+  // Merge fresh fields into the cached user (e.g. after editing the profile in
+  // Settings) so the header and anything else reading auth.state.user updates
+  // without a re-login.
+  updateUser(patch) {
+    state.user = { ...(state.user || {}), ...patch };
+    localStorage.setItem(USER_KEY, JSON.stringify(state.user));
+    return state.user;
+  },
+
   logout() {
     state.token = "";
     state.user = null;

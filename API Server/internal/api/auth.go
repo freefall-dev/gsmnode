@@ -19,11 +19,12 @@ const (
 // PocketBase on each request (see identify), so a role change or a deletion
 // takes effect immediately rather than lingering until the token expires.
 type callerIdentity struct {
-	ID    string
-	Email string
-	Name  string
-	Role  string
-	OrgID string // organization record id ("" = none); scopes what an admin manages
+	ID       string
+	Email    string
+	Name     string
+	Role     string
+	OrgID    string // organization record id ("" = none); scopes what an admin manages
+	Verified bool
 }
 
 func (c *callerIdentity) isSuperadmin() bool { return c != nil && c.Role == roleSuperadmin }
@@ -55,12 +56,14 @@ func (s *Server) identify(ctx context.Context, token string) (*callerIdentity, i
 	if role == "" {
 		role = roleUser
 	}
+	verified, _ := rec["verified"].(bool)
 	return &callerIdentity{
-		ID:    asString(rec["id"]),
-		Email: asString(rec["email"]),
-		Name:  asString(rec["name"]),
-		Role:  role,
-		OrgID: asString(rec["organization"]),
+		ID:       asString(rec["id"]),
+		Email:    asString(rec["email"]),
+		Name:     asString(rec["name"]),
+		Role:     role,
+		OrgID:    asString(rec["organization"]),
+		Verified: verified,
 	}, http.StatusOK, nil
 }
 
@@ -146,6 +149,7 @@ type userDTO struct {
 	Name         string `json:"name,omitempty"`
 	Role         string `json:"role"`
 	Organization string `json:"organization,omitempty"` // org record id, so the panel can default an admin's actions to their own org
+	Verified     bool   `json:"verified"`
 }
 
 // handleLogin authenticates against the PocketBase users collection and returns
@@ -205,7 +209,7 @@ func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"valid": false})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"valid": true, "user": userDTO{ID: who.ID, Email: who.Email, Name: who.Name, Role: who.Role, Organization: who.OrgID}})
+	writeJSON(w, http.StatusOK, map[string]any{"valid": true, "user": userDTO{ID: who.ID, Email: who.Email, Name: who.Name, Role: who.Role, Organization: who.OrgID, Verified: who.Verified}})
 }
 
 // handleRefresh exchanges a still-valid token for a fresh PocketBase token,
@@ -242,7 +246,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "not authenticated")
 		return
 	}
-	writeJSON(w, http.StatusOK, userDTO{ID: who.ID, Email: who.Email, Name: who.Name, Role: who.Role, Organization: who.OrgID})
+	writeJSON(w, http.StatusOK, userDTO{ID: who.ID, Email: who.Email, Name: who.Name, Role: who.Role, Organization: who.OrgID, Verified: who.Verified})
 }
 
 // recordToUser projects a PocketBase user record to the compact identity shape.
@@ -251,11 +255,13 @@ func recordToUser(rec pb.Record) userDTO {
 	if role == "" {
 		role = roleUser
 	}
+	verified, _ := rec["verified"].(bool)
 	return userDTO{
 		ID:           asString(rec["id"]),
 		Email:        asString(rec["email"]),
 		Name:         asString(rec["name"]),
 		Role:         role,
 		Organization: asString(rec["organization"]),
+		Verified:     verified,
 	}
 }

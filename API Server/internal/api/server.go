@@ -92,6 +92,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/auth/validate", s.handleValidate)
 	mux.HandleFunc("GET /api/auth/me", s.requireUser(s.handleMe))
 
+	// Self-service account — a signed-in user editing their own name/password.
+	mux.HandleFunc("PATCH /api/auth/me", s.requireUser(s.handleUpdateMe))
+	mux.HandleFunc("POST /api/auth/change-password", s.requireUser(s.handleChangePassword))
+
 	// User management — gated on the caller being a manager (admin or superadmin).
 	// Only a superadmin may create, edit, or delete superadmins.
 	mux.HandleFunc("GET /api/users", s.requireManager(s.handleListUsers))
