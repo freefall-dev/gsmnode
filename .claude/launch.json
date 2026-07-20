@@ -14,6 +14,13 @@
       "runtimeArgs": [],
       "cwd": "API Server",
       "port": 8080
+    },
+    {
+      "name": "api-panel",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "API Server/panel",
+      "port": 5174
     }
   ]
 }

@@ -98,7 +98,7 @@ const mobileApi = [
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-3xl flex-col gap-6 px-6 pt-12 pb-16">
+  <div class="mx-auto flex max-w-5xl flex-col gap-6 px-6 pt-12 pb-16">
     <!-- Header -->
     <div class="flex items-center gap-4">
       <img
