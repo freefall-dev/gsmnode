@@ -21,7 +21,7 @@ const router = useRouter();
 const nav = [
   { name: "devices", label: "Devices", icon: Smartphone },
   { name: "send", label: "Send SMS", icon: Send },
-  { name: "call", label: "Call", icon: Phone },
+  { name: "call", label: "Calls", icon: Phone },
   { name: "messages", label: "Messages", icon: MessageSquare },
   { name: "inbox", label: "Inbox", icon: Inbox },
   { name: "webhooks", label: "Webhooks", icon: Webhook },

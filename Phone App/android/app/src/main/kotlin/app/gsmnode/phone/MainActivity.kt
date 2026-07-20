@@ -22,11 +22,13 @@ class MainActivity : FlutterActivity() {
         const val METHOD_CHANNEL = "app.gsmnode/sms"
         const val EVENT_CHANNEL = "app.gsmnode/sms_incoming"
         const val STATUS_CHANNEL = "app.gsmnode/sms_status"
+        const val CALL_CHANNEL = "app.gsmnode/call_incoming"
         const val STATUS_ACTION = "app.gsmnode.SMS_STATUS"
 
         // Sinks used by the broadcast receivers to push events into Dart.
         @Volatile var incomingSink: EventChannel.EventSink? = null
         @Volatile var statusSink: EventChannel.EventSink? = null
+        @Volatile var callSink: EventChannel.EventSink? = null
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -46,6 +48,42 @@ class MainActivity : FlutterActivity() {
                     }
                     try {
                         sendSms(phone, message, simSlot, messageId)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("SEND_FAILED", e.message, null)
+                    }
+                }
+                "sendDataSms" -> {
+                    val phone = call.argument<String>("phone")
+                    val payload = call.argument<String>("payload")
+                    val port = call.argument<Int>("port") ?: 0
+                    val simSlot = call.argument<Int>("simSlot")
+                    val messageId = call.argument<String>("messageId")
+                    if (phone.isNullOrBlank() || payload == null) {
+                        result.error("BAD_ARGS", "phone and payload are required", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        sendDataSms(phone, payload, port, simSlot, messageId)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("SEND_FAILED", e.message, null)
+                    }
+                }
+                "sendMms" -> {
+                    val phone = call.argument<String>("phone")
+                    val subject = call.argument<String>("subject") ?: ""
+                    val text = call.argument<String>("text") ?: ""
+                    val attachments = call.argument<List<Map<String, Any?>>>("attachments")
+                        ?: emptyList()
+                    val simSlot = call.argument<Int>("simSlot")
+                    val messageId = call.argument<String>("messageId")
+                    if (phone.isNullOrBlank()) {
+                        result.error("BAD_ARGS", "phone is required", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        sendMms(phone, subject, text, attachments, simSlot, messageId)
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("SEND_FAILED", e.message, null)
@@ -100,6 +138,16 @@ class MainActivity : FlutterActivity() {
                 }
                 override fun onCancel(args: Any?) {
                     statusSink = null
+                }
+            })
+
+        EventChannel(messenger, CALL_CHANNEL).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
+                    callSink = sink
+                }
+                override fun onCancel(args: Any?) {
+                    callSink = null
                 }
             })
     }
@@ -224,5 +272,56 @@ class MainActivity : FlutterActivity() {
         } else {
             sms.sendTextMessage(phone, null, message, sentPI, deliveredPI)
         }
+    }
+
+    /// Sends a binary data SMS: base64 [payload] to [port] on the chosen SIM.
+    private fun sendDataSms(
+        phone: String, payload: String, port: Int, simSlot: Int?, messageId: String?
+    ) {
+        val bytes = android.util.Base64.decode(payload, android.util.Base64.DEFAULT)
+        val sms = smsManagerFor(simSlot)
+        val sentPI = statusPendingIntent(messageId, phone, "sent")
+        val deliveredPI = statusPendingIntent(messageId, phone, "delivered")
+        sms.sendDataMessage(phone, null, port.toShort(), bytes, sentPI, deliveredPI)
+    }
+
+    /// Sends an MMS with an optional subject/text and attachments
+    /// ([{filename, content_type, data(base64)}]) via SmsManager. Best-effort:
+    /// actual delivery depends on the carrier's MMSC and APN configuration. The
+    /// M-Send.req PDU is composed by MmsPduBuilder and handed to the platform,
+    /// which routes it through the carrier's MMS stack.
+    private fun sendMms(
+        phone: String,
+        subject: String,
+        text: String,
+        attachments: List<Map<String, Any?>>,
+        simSlot: Int?,
+        messageId: String?
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            throw IllegalStateException("MMS send requires Android 5.0+")
+        }
+        val parts = ArrayList<MmsPduBuilder.Part>()
+        if (text.isNotEmpty()) {
+            parts.add(MmsPduBuilder.Part("text.txt", "text/plain", text.toByteArray()))
+        }
+        for (a in attachments) {
+            val name = a["filename"] as? String ?: "attachment"
+            val ct = a["content_type"] as? String ?: "application/octet-stream"
+            val dataB64 = a["data"] as? String ?: continue
+            val bytes = android.util.Base64.decode(dataB64, android.util.Base64.DEFAULT)
+            parts.add(MmsPduBuilder.Part(name, ct, bytes))
+        }
+        if (parts.isEmpty()) throw IllegalArgumentException("MMS has no content")
+
+        val pdu = MmsPduBuilder.buildSendReq(phone, subject, parts)
+        val cacheFile = java.io.File(cacheDir, "mms_${System.currentTimeMillis()}.pdu")
+        cacheFile.writeBytes(pdu)
+        val contentUri = androidx.core.content.FileProvider.getUriForFile(
+            this, "$packageName.fileprovider", cacheFile
+        )
+        val sms = smsManagerFor(simSlot)
+        val sentPI = statusPendingIntent(messageId, phone, "sent")
+        sms.sendMultimediaMessage(this, contentUri, null, null, sentPI)
     }
 }

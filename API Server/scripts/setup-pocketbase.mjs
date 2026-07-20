@@ -59,6 +59,7 @@ async function getCollections() {
 const f = {
   text: (name, opts = {}) => ({ name, type: "text", required: false, ...opts }),
   number: (name, opts = {}) => ({ name, type: "number", required: false, ...opts }),
+  bool: (name, opts = {}) => ({ name, type: "bool", required: false, ...opts }),
   date: (name, opts = {}) => ({ name, type: "date", required: false, ...opts }),
   json: (name, opts = {}) => ({ name, type: "json", required: false, maxSize: 2000000, ...opts }),
   url: (name, opts = {}) => ({ name, type: "url", required: false, ...opts }),
@@ -108,10 +109,15 @@ function definitions(ids) {
       fields: [
         f.json("phone_numbers", { required: true }),
         f.text("text_message"),
-        f.select("type", ["sms", "call"]),
+        f.select("type", ["sms", "call", "data", "mms"]),
         f.number("sim_number"),
         f.select("status", ["Pending", "Processed", "Sent", "Delivered", "Failed"]),
         f.text("error"),
+        f.text("data_payload"), // base64 binary payload for data SMS
+        f.number("data_port"),
+        f.text("subject"), // MMS subject
+        f.json("attachments"), // MMS [{filename, content_type, data(base64)}]
+        f.bool("encrypted"), // phone_numbers + text_message are E2E ciphertext
         f.date("schedule_at"),
         f.date("sent_at"),
         f.date("delivered_at"),
@@ -132,8 +138,14 @@ function definitions(ids) {
       fields: [
         f.text("phone_number", { required: true }),
         f.text("message"),
+        f.select("type", ["sms", "data", "mms"]),
         f.date("received_at"),
         f.number("sim_slot"), // 0-based SIM slot the message arrived on
+        f.text("data_payload"), // base64 binary payload for data SMS
+        f.number("data_port"),
+        f.text("subject"), // MMS subject
+        f.json("attachments"), // MMS [{filename, content_type, data(base64)}]
+        f.bool("encrypted"), // phone_number + message are E2E ciphertext
         f.relation("device", ids.devices, { cascadeDelete: false }),
         f.relation("owner", ids.users, { required: true, cascadeDelete: true }),
         f.autodate("created", { onCreate: true, onUpdate: false }),
@@ -141,11 +153,32 @@ function definitions(ids) {
       indexes: ["CREATE INDEX idx_inbox_owner ON inbox (owner)"],
     },
     {
+      name: "calls",
+      type: "base",
+      ...LOCKED,
+      fields: [
+        f.text("phone_number", { required: true }),
+        f.select("direction", ["incoming", "outgoing"]),
+        f.select("status", ["ringing", "missed", "answered", "completed", "rejected", "failed"]),
+        f.number("sim_slot"),
+        f.number("duration"), // seconds, when known
+        f.date("started_at"),
+        f.relation("device", ids.devices, { cascadeDelete: false }),
+        f.relation("owner", ids.users, { required: true, cascadeDelete: true }),
+        f.autodate("created", { onCreate: true, onUpdate: false }),
+      ],
+      indexes: ["CREATE INDEX idx_calls_owner ON calls (owner)"],
+    },
+    {
       name: "webhooks",
       type: "base",
       ...LOCKED,
       fields: [
-        f.select("event", ["sms:received", "sms:sent", "sms:delivered", "sms:failed"]),
+        f.select("event", [
+          "sms:received", "sms:sent", "sms:delivered", "sms:failed",
+          "sms:data-received", "mms:received", "mms:downloaded",
+          "call:received", "call:sent", "call:failed",
+        ]),
         f.url("url", { required: true }),
         f.relation("device", ids.devices, { cascadeDelete: false }),
         f.relation("owner", ids.users, { required: true, cascadeDelete: true }),
@@ -214,7 +247,7 @@ async function main() {
 
   // Resolve collection ids needed for relation fields. devices must exist before
   // messages/inbox/webhooks reference it, so create in order, refreshing ids.
-  const order = ["devices", "messages", "inbox", "webhooks"];
+  const order = ["devices", "messages", "inbox", "calls", "webhooks"];
   for (const name of order) {
     const ids = {
       users: collections.users.id,
@@ -233,7 +266,7 @@ async function main() {
   }
 
   console.log("\nPocketBase setup complete.");
-  console.log("Collections: users (existing), organizations, devices, messages, inbox, webhooks.");
+  console.log("Collections: users (existing), organizations, devices, messages, inbox, calls, webhooks.");
   console.log("\nNext: create a user to log in with, e.g. via the PocketBase admin UI,");
   console.log("or run scripts/create-user.mjs.");
 }

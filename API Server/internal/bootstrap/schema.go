@@ -45,14 +45,23 @@ var collectionsSchema = map[string][]fieldDef{
 		fAutodate("created", true, false),
 		fAutodate("updated", true, true),
 	},
-	// Outbound SMS / call requests dispatched to devices.
+	// Outbound SMS / call / data-SMS / MMS requests dispatched to devices.
 	"messages": {
 		fJSON("phone_numbers", true, jsonMaxSize),
 		fText("text_message", false),
-		fSelect("type", []string{"sms", "call"}, false),
+		fSelect("type", []string{"sms", "call", "data", "mms"}, false),
 		fNumber("sim_number"),
 		fSelect("status", []string{"Pending", "Processed", "Sent", "Delivered", "Failed"}, false),
 		fText("error", false),
+		// Data SMS: base64-encoded binary payload sent to a destination port.
+		fText("data_payload", false),
+		fNumber("data_port"),
+		// MMS: subject line and attachments [{filename, content_type, data(base64)}].
+		fText("subject", false),
+		fJSON("attachments", false, jsonMaxSize),
+		// When true, phone_numbers and text_message hold client-encrypted
+		// ciphertext (E2E); the server stores/relays them without reading them.
+		fBool("encrypted"),
 		fDate("schedule_at", false),
 		fDate("sent_at", false),
 		fDate("delivered_at", false),
@@ -61,19 +70,43 @@ var collectionsSchema = map[string][]fieldDef{
 		fAutodate("created", true, false),
 		fAutodate("updated", true, true),
 	},
-	// Inbound SMS received on a device.
+	// Inbound SMS / data-SMS / MMS received on a device.
 	"inbox": {
 		fText("phone_number", true),
 		fText("message", false),
+		fSelect("type", []string{"sms", "data", "mms"}, false),
 		fDate("received_at", false),
 		fNumber("sim_slot"), // 0-based SIM slot the message arrived on
+		// Data SMS payload/port and MMS subject/attachments (mirrors messages).
+		fText("data_payload", false),
+		fNumber("data_port"),
+		fText("subject", false),
+		fJSON("attachments", false, jsonMaxSize),
+		// When true, phone_number and message hold client-encrypted ciphertext.
+		fBool("encrypted"),
 		fRelation("device", "devices", false, false),
 		fRelation("owner", "users", true, true),
 		fAutodate("created", true, false),
 	},
-	// Per-owner webhook subscriptions for message lifecycle events.
+	// Inbound / outbound call log, reported by devices.
+	"calls": {
+		fText("phone_number", true),
+		fSelect("direction", []string{"incoming", "outgoing"}, false),
+		fSelect("status", []string{"ringing", "missed", "answered", "completed", "rejected", "failed"}, false),
+		fNumber("sim_slot"),
+		fNumber("duration"), // seconds, when known
+		fDate("started_at", false),
+		fRelation("device", "devices", false, false),
+		fRelation("owner", "users", true, true),
+		fAutodate("created", true, false),
+	},
+	// Per-owner webhook subscriptions for message/call lifecycle events.
 	"webhooks": {
-		fSelect("event", []string{"sms:received", "sms:sent", "sms:delivered", "sms:failed"}, false),
+		fSelect("event", []string{
+			"sms:received", "sms:sent", "sms:delivered", "sms:failed",
+			"sms:data-received", "mms:received", "mms:downloaded",
+			"call:received", "call:sent", "call:failed",
+		}, false),
 		fURL("url", true),
 		fRelation("device", "devices", false, false),
 		fRelation("owner", "users", true, true),
@@ -88,6 +121,7 @@ var createOrder = []string{
 	"devices",
 	"messages",
 	"inbox",
+	"calls",
 	"webhooks",
 }
 
@@ -99,6 +133,7 @@ var reconcileOrder = []string{
 	"devices",
 	"messages",
 	"inbox",
+	"calls",
 	"webhooks",
 }
 
@@ -114,5 +149,6 @@ var indexes = map[string][]string{
 		"CREATE INDEX idx_messages_owner ON messages (owner)",
 	},
 	"inbox":    {"CREATE INDEX idx_inbox_owner ON inbox (owner)"},
+	"calls":    {"CREATE INDEX idx_calls_owner ON calls (owner)"},
 	"webhooks": {"CREATE INDEX idx_webhooks_owner_event ON webhooks (owner, event)"},
 }

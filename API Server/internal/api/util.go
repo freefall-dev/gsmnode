@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 )
@@ -15,6 +16,35 @@ func asString(v any) string {
 	default:
 		return ""
 	}
+}
+
+// asBool coerces a JSON value to a bool (PocketBase returns bool fields as bool).
+func asBool(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		return t == "true" || t == "1"
+	case float64:
+		return t != 0
+	}
+	return false
+}
+
+// asAttachments coerces a stored JSON attachments value into typed attachments.
+func asAttachments(v any) []attachment {
+	if v == nil {
+		return nil
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var out []attachment
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 // asInt coerces a JSON number/string to an int.

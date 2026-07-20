@@ -40,8 +40,9 @@ Managed by `API Server/scripts/setup-pocketbase.mjs` (idempotent):
 
 - `users` — auth (existing default collection)
 - `devices` — `device_id, name, platform, app_version, push_token, auth_token, status, last_seen_at, owner`
-- `messages` — `phone_numbers, text_message, sim_number, status, error, schedule_at, sent_at, delivered_at, device, owner`
-- `inbox` — `phone_number, message, received_at, device, owner`
+- `messages` — `phone_numbers, text_message, type (sms/call/data/mms), sim_number, status, error, data_payload, data_port, subject, attachments, encrypted, schedule_at, sent_at, delivered_at, device, owner`
+- `inbox` — `phone_number, message, type (sms/data/mms), received_at, sim_slot, data_payload, data_port, subject, attachments, encrypted, device, owner`
+- `calls` — `phone_number, direction, status, sim_slot, duration, started_at, device, owner`
 - `webhooks` — `event, url, device, owner`
 
 Collections are locked to superuser access; the API Server enforces per-user
@@ -72,8 +73,17 @@ ownership in application logic.
 
 ## Webhooks
 
-Events `sms:received`, `sms:sent`, `sms:delivered`, `sms:failed` are POSTed to
-registered URLs as `{event, device_id, payload, created_at}`.
+Events `sms:received`, `sms:sent`, `sms:delivered`, `sms:failed`,
+`sms:data-received`, `mms:received`, `mms:downloaded`, `call:received`,
+`call:sent`, `call:failed` are POSTed to registered URLs as
+`{event, device_id, payload, created_at}`.
+
+## End-to-end encryption
+
+Optional and opt-in: set a shared passphrase in the Web App (Settings) and Phone
+App (login). Message text and recipient numbers are then AES-256-GCM encrypted in
+the browser/phone before they reach the API Server, which stores only ciphertext.
+See [`API Server/README.md`](API%20Server/README.md) for the wire format.
 
 ## Per-surface docs
 

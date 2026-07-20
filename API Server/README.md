@@ -95,14 +95,25 @@ Health check: `GET http://localhost:8080/api/health`.
 | `GET` | `/api/auth/me` | Current user |
 | `GET` | `/api/devices` | List your devices |
 | `DELETE` | `/api/devices/{id}` | Remove a device |
-| `POST` | `/api/messages` | Enqueue SMS `{phone_numbers[], text_message, device_id?, sim_number?, schedule_at?}` |
+| `POST` | `/api/messages` | Enqueue SMS/data/MMS (see below) |
 | `POST` | `/api/calls` | Enqueue a phone call `{phone_number, device_id?}` |
+| `GET` | `/api/calls` | List the call log (`?direction=incoming\|outgoing`) |
 | `GET` | `/api/messages` | List messages (`?status=&device_id=&type=&page=&per_page=`) |
 | `GET` | `/api/messages/{id}` | Message state |
-| `GET` | `/api/inbox` | Received SMS |
+| `GET` | `/api/inbox` | Received SMS/data/MMS (`?type=sms\|data\|mms`) |
 | `GET` | `/api/webhooks` | List webhooks |
 | `POST` | `/api/webhooks` | Register `{event, url, device_id?}` |
 | `DELETE` | `/api/webhooks/{id}` | Delete webhook |
+
+`POST /api/messages` accepts a `type` of `sms` (default), `data`, or `mms`:
+
+- **sms** — `{phone_numbers[], text_message, device_id?, sim_number?, schedule_at?}`
+- **data** — `{type:"data", phone_numbers[], data_payload(base64), data_port?, ...}`
+- **mms** — `{type:"mms", phone_numbers[], text_message?, subject?, attachments:[{filename, content_type, data(base64)}], ...}`
+
+Any send may set `encrypted: true`, in which case `phone_numbers` + `text_message`
+hold client-side ciphertext (see **End-to-end encryption** below) that the server
+stores and relays verbatim.
 
 ### Mobile / device endpoints
 
@@ -112,7 +123,8 @@ Health check: `GET http://localhost:8080/api/health`.
 | `POST` | `/api/mobile/v1/ping` | Heartbeat (auth: device token). Optional body `{sims: [...]}` advertises the device's SIM slots |
 | `GET` | `/api/mobile/v1/messages` | Pull pending messages; marks them `Processed` |
 | `PATCH` | `/api/mobile/v1/messages/{id}` | Report `{status, error?}` (`Sent`/`Delivered`/`Failed`) |
-| `POST` | `/api/mobile/v1/inbox` | Report received SMS `{phone_number, message, received_at?, sim_slot?}` |
+| `POST` | `/api/mobile/v1/inbox` | Report received SMS/data/MMS `{type?, phone_number, message, data_payload?, data_port?, subject?, attachments?, received_at?, sim_slot?, encrypted?}` |
+| `POST` | `/api/mobile/v1/calls` | Report a call event `{phone_number, direction, status, sim_slot?, duration?, started_at?}` |
 
 ### Multiple SIM cards
 
@@ -138,8 +150,29 @@ reports `Sent` (a call has no delivery report) or `Failed`.
 
 ### Webhook events
 
-`sms:received`, `sms:sent`, `sms:delivered`, `sms:failed`. Delivered as
-`POST {event, device_id, payload, created_at}` to the registered URL.
+Delivered as `POST {event, device_id, payload, created_at}` to the registered URL.
+
+| Event | Fires when |
+|---|---|
+| `sms:received` | An inbound text SMS is reported |
+| `sms:sent` / `sms:delivered` / `sms:failed` | An outbound message changes state |
+| `sms:data-received` | An inbound binary data SMS is reported |
+| `mms:received` | An inbound MMS arrives (notification) |
+| `mms:downloaded` | An inbound MMS's body + attachments are available |
+| `call:received` | An inbound call is reported |
+| `call:sent` | An outbound call is reported |
+| `call:failed` | A call is missed / rejected / failed |
+
+### End-to-end encryption (optional)
+
+When a client sets a shared passphrase, it encrypts `text_message` and each
+recipient number (and decrypts the inbox) itself, marking the record
+`encrypted: true`. The API Server and PocketBase only ever store ciphertext —
+they never see the passphrase. The scheme is AES-256-GCM with a PBKDF2-HMAC-SHA256
+key (150k iterations); the wire form is `gsmenc:v1:` + base64(`salt16‖iv12‖ct`).
+The Web App (`web/src/crypto.js`) and Phone App
+(`lib/services/crypto_service.dart`) implement the identical format so they
+interoperate. With no passphrase set, everything is stored in cleartext as before.
 
 ## Quick smoke test
 

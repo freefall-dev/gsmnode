@@ -20,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController(text: storage.userEmail ?? '');
   final _password = TextEditingController();
   final _deviceName = TextEditingController(text: storage.deviceName ?? 'My Phone');
+  final _passphrase = TextEditingController(text: storage.encPassphrase);
 
   bool _busy = false;
   String? _error;
@@ -30,6 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _email.dispose();
     _password.dispose();
     _deviceName.dispose();
+    _passphrase.dispose();
     super.dispose();
   }
 
@@ -40,6 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       storage.apiBase = _apiBase.text.trim();
+      storage.encPassphrase = _passphrase.text.trim();
       await apiClient.login(_email.text.trim(), _password.text);
 
       final deviceId = storage.deviceId ??
@@ -117,6 +120,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _deviceName,
                   decoration: const InputDecoration(labelText: 'Device name'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _passphrase,
+                  decoration: const InputDecoration(
+                    labelText: 'Encryption passphrase (optional)',
+                    hintText: 'Match the Web App to read E2E messages',
+                  ),
+                  obscureText: true,
                 ),
                 const SizedBox(height: 16),
                 if (_error != null)

@@ -12,7 +12,18 @@ const event = ref("sms:received");
 const url = ref("");
 const creating = ref(false);
 
-const events = ["sms:received", "sms:sent", "sms:delivered", "sms:failed"];
+const events = [
+  "sms:received",
+  "sms:sent",
+  "sms:delivered",
+  "sms:failed",
+  "sms:data-received",
+  "mms:received",
+  "mms:downloaded",
+  "call:received",
+  "call:sent",
+  "call:failed",
+];
 
 async function load() {
   loading.value = true;

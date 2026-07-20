@@ -19,6 +19,7 @@ const (
 	colDevices  = "devices"
 	colMessages = "messages"
 	colInbox    = "inbox"
+	colCalls    = "calls"
 	colWebhooks = "webhooks"
 )
 
@@ -132,6 +133,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/messages/{id}", s.requireUser(s.handleGetMessage))
 
 	mux.HandleFunc("POST /api/calls", s.requireUser(s.handleEnqueueCall))
+	mux.HandleFunc("GET /api/calls", s.requireUser(s.handleListCalls))
 
 	mux.HandleFunc("GET /api/inbox", s.requireUser(s.handleListInbox))
 
@@ -147,6 +149,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/mobile/v1/messages", s.requireDevice(s.handlePullMessages))
 	mux.HandleFunc("PATCH /api/mobile/v1/messages/{id}", s.requireDevice(s.handleReportMessage))
 	mux.HandleFunc("POST /api/mobile/v1/inbox", s.requireDevice(s.handleReceiveSMS))
+	mux.HandleFunc("POST /api/mobile/v1/calls", s.requireDevice(s.handleReportCall))
 
 	return s.withMiddleware(mux)
 }

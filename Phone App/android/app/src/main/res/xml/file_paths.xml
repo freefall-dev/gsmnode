@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- The composed MMS PDU is written to the app cache and shared with the
+         platform MMS stack via FileProvider. -->
+    <cache-path name="mms_cache" path="." />
+</paths>

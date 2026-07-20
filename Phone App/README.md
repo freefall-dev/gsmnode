@@ -113,6 +113,31 @@ android_overlay/            native Android files to copy after `flutter create`
   PendingIntents; `SmsStatusReceiver` forwards the outcome (tagged with the
   message id) to Dart, which reports `Delivered`/`Failed` to the API Server.
 
+## Data SMS, MMS, calls & encryption
+
+Beyond text SMS the gateway now also handles:
+
+- **Data SMS** — `SmsManager.sendDataMessage` for outbound; a `DATA_SMS_RECEIVED`
+  filter on `SmsReceiver` for inbound (payload forwarded base64 + port).
+- **MMS** — best-effort `SmsManager.sendMultimediaMessage` with an M-Send.req PDU
+  composed by `MmsPduBuilder.kt` (shared with the platform via a `FileProvider`);
+  `MmsReceiver` reports inbound MMS notifications (WAP push). **Caveats:** real MMS
+  delivery depends on the carrier MMSC/APN, and fetching a full inbound MMS body +
+  attachments is a separate MMSC download a non-default SMS app can't reliably do,
+  so inbound MMS is reported as a notification (sender + subject) without
+  attachments.
+- **Incoming/outgoing calls** — `CallReceiver` watches `PHONE_STATE` and reports
+  ringing/answered/missed/completed to the server's call log. `NEW_OUTGOING_CALL`
+  is deprecated on Android 10+ and only fires for the default dialer, so outgoing
+  calls are logged primarily via the message pipeline the gateway itself uses.
+- **End-to-end encryption** — enter a passphrase at login; `crypto_service.dart`
+  (AES-256-GCM + PBKDF2, matching the Web App) decrypts outbound messages before
+  they hit the radio and encrypts inbound before forwarding them.
+
+New runtime permissions to grant on device: **RECEIVE_MMS/RECEIVE_WAP_PUSH**,
+**READ_CALL_LOG**, and (for the call state) **READ_PHONE_STATE**. These are
+declared in the manifest; grant them alongside SMS/phone on first run.
+
 ## Multiple SIM cards
 
 On dual-SIM devices the app enumerates the active SIMs (needs `READ_PHONE_STATE`,

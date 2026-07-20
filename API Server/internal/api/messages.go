@@ -25,7 +25,22 @@ var validReportStates = map[string]bool{
 const (
 	msgTypeSMS  = "sms"
 	msgTypeCall = "call"
+	msgTypeData = "data" // binary payload sent to a destination port
+	msgTypeMMS  = "mms"  // multimedia message with subject + attachments
 )
+
+var validSendTypes = map[string]bool{
+	msgTypeSMS: true, msgTypeData: true, msgTypeMMS: true,
+}
+
+// attachment is one part of an MMS: inline base64 data (outbound/inbound) or a
+// URL the client can fetch (inbound, when the device reports a link instead).
+type attachment struct {
+	Filename    string `json:"filename,omitempty"`
+	ContentType string `json:"content_type,omitempty"`
+	Data        string `json:"data,omitempty"` // base64-encoded bytes
+	URL         string `json:"url,omitempty"`
+}
 
 type messageDTO struct {
 	ID           string   `json:"id"`
@@ -35,9 +50,17 @@ type messageDTO struct {
 	DeviceID     string   `json:"device_id,omitempty"`
 	// SimNumber is the 0-based SIM slot to send on; nil means the device's
 	// default SIM. A pointer so slot 0 is distinguishable from "unset".
-	SimNumber  *int   `json:"sim_number,omitempty"`
-	Status     string `json:"status"`
-	Error      string `json:"error,omitempty"`
+	SimNumber *int   `json:"sim_number,omitempty"`
+	Status    string `json:"status"`
+	Error     string `json:"error,omitempty"`
+	// Data SMS.
+	DataPayload string `json:"data_payload,omitempty"`
+	DataPort    *int   `json:"data_port,omitempty"`
+	// MMS.
+	Subject     string       `json:"subject,omitempty"`
+	Attachments []attachment `json:"attachments,omitempty"`
+	// Encrypted marks phone_numbers + text_message as E2E ciphertext.
+	Encrypted  bool   `json:"encrypted,omitempty"`
 	ScheduleAt string `json:"schedule_at,omitempty"`
 	CreatedAt  string `json:"created_at"`
 }
@@ -46,6 +69,10 @@ func recordToMessage(rec pb.Record) messageDTO {
 	msgType := asString(rec["type"])
 	if msgType == "" {
 		msgType = msgTypeSMS
+	}
+	var dataPort *int
+	if p := asInt(rec["data_port"]); p != 0 || asString(rec["data_payload"]) != "" {
+		dataPort = &p
 	}
 	return messageDTO{
 		ID:           asString(rec["id"]),
@@ -56,22 +83,39 @@ func recordToMessage(rec pb.Record) messageDTO {
 		SimNumber:    unpackSlot(rec["sim_number"]),
 		Status:       asString(rec["status"]),
 		Error:        asString(rec["error"]),
+		DataPayload:  asString(rec["data_payload"]),
+		DataPort:     dataPort,
+		Subject:      asString(rec["subject"]),
+		Attachments:  asAttachments(rec["attachments"]),
+		Encrypted:    asBool(rec["encrypted"]),
 		ScheduleAt:   asString(rec["schedule_at"]),
 		CreatedAt:    asString(rec["created"]),
 	}
 }
 
 type enqueueRequest struct {
+	// Type selects the message kind: "sms" (default), "data", or "mms".
+	Type         string   `json:"type"`
 	PhoneNumbers []string `json:"phone_numbers"`
 	TextMessage  string   `json:"text_message"`
 	DeviceID     string   `json:"device_id"`
 	// SimNumber is the 0-based SIM slot to send on. A pointer so slot 0 can be
 	// selected explicitly; omit it (nil) to use the device's default SIM.
-	SimNumber  *int   `json:"sim_number"`
+	SimNumber *int `json:"sim_number"`
+	// Data SMS: base64 payload + destination port.
+	DataPayload string `json:"data_payload"`
+	DataPort    *int   `json:"data_port"`
+	// MMS: subject + attachments.
+	Subject     string       `json:"subject"`
+	Attachments []attachment `json:"attachments"`
+	// Encrypted marks phone_numbers + text_message as already-ciphertext (E2E);
+	// the server stores and relays them without inspecting them.
+	Encrypted  bool   `json:"encrypted"`
 	ScheduleAt string `json:"schedule_at"`
 }
 
-// handleEnqueueMessage queues an outbound SMS for one of the user's devices.
+// handleEnqueueMessage queues an outbound SMS, data SMS, or MMS for one of the
+// user's devices, selected by the request's "type" field.
 func (s *Server) handleEnqueueMessage(w http.ResponseWriter, r *http.Request) {
 	uid, _ := userFromCtx(r.Context())
 
@@ -80,14 +124,38 @@ func (s *Server) handleEnqueueMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	msgType := req.Type
+	if msgType == "" {
+		msgType = msgTypeSMS
+	}
+	if !validSendTypes[msgType] {
+		writeError(w, http.StatusBadRequest, "invalid type (want sms, data, or mms)")
+		return
+	}
 	phones := cleanPhones(req.PhoneNumbers)
 	if len(phones) == 0 {
 		writeError(w, http.StatusBadRequest, "at least one phone number is required")
 		return
 	}
-	if strings.TrimSpace(req.TextMessage) == "" {
-		writeError(w, http.StatusBadRequest, "text_message is required")
-		return
+
+	// Per-type payload validation. Encrypted payloads are opaque, so the
+	// "required" checks only ensure the relevant field is present.
+	switch msgType {
+	case msgTypeSMS:
+		if strings.TrimSpace(req.TextMessage) == "" {
+			writeError(w, http.StatusBadRequest, "text_message is required")
+			return
+		}
+	case msgTypeData:
+		if strings.TrimSpace(req.DataPayload) == "" {
+			writeError(w, http.StatusBadRequest, "data_payload (base64) is required for data SMS")
+			return
+		}
+	case msgTypeMMS:
+		if strings.TrimSpace(req.TextMessage) == "" && len(req.Attachments) == 0 {
+			writeError(w, http.StatusBadRequest, "mms requires text_message or at least one attachment")
+			return
+		}
 	}
 
 	// Resolve the target device: explicit device_id, else the user's first
@@ -105,13 +173,26 @@ func (s *Server) handleEnqueueMessage(w http.ResponseWriter, r *http.Request) {
 	fields := pb.Record{
 		"phone_numbers": phones,
 		"text_message":  req.TextMessage,
-		"type":          msgTypeSMS,
+		"type":          msgType,
 		"device":        deviceRecID,
 		"owner":         uid,
 		"status":        statusPending,
+		"encrypted":     req.Encrypted,
 	}
 	if req.SimNumber != nil {
 		fields["sim_number"] = packSlot(*req.SimNumber)
+	}
+	if msgType == msgTypeData {
+		fields["data_payload"] = req.DataPayload
+		if req.DataPort != nil {
+			fields["data_port"] = *req.DataPort
+		}
+	}
+	if msgType == msgTypeMMS {
+		fields["subject"] = req.Subject
+		if len(req.Attachments) > 0 {
+			fields["attachments"] = req.Attachments
+		}
 	}
 	if req.ScheduleAt != "" {
 		fields["schedule_at"] = req.ScheduleAt
@@ -275,9 +356,11 @@ func (s *Server) handleReportMessage(w http.ResponseWriter, r *http.Request) {
 	if event := eventForStatus(req.Status); event != "" {
 		s.dispatchWebhooks(asString(device["owner"]), asString(device["id"]), event, map[string]any{
 			"message_id":    id,
+			"type":          asString(updated["type"]),
 			"phone_numbers": asStringSlice(updated["phone_numbers"]),
 			"status":        req.Status,
 			"error":         req.Error,
+			"encrypted":     asBool(updated["encrypted"]),
 		})
 	}
 

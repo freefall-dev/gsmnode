@@ -8,6 +8,7 @@ import { themePref, setThemePref } from "../theme";
 import PageHeader from "../components/PageHeader.vue";
 import UsersManager from "../components/UsersManager.vue";
 import OrgManager from "../components/OrgManager.vue";
+import { getPassphrase, setPassphrase } from "../crypto";
 
 const router = useRouter();
 
@@ -49,6 +50,21 @@ async function saveName() {
 }
 
 // --- Account: change password ---
+
+// End-to-end encryption passphrase (stored only in this browser).
+const passphrase = ref(getPassphrase());
+const passphraseSaved = ref(false);
+function savePassphrase() {
+  setPassphrase(passphrase.value.trim());
+  passphraseSaved.value = true;
+  setTimeout(() => (passphraseSaved.value = false), 1500);
+}
+function clearPassphrase() {
+  passphrase.value = "";
+  setPassphrase("");
+  passphraseSaved.value = true;
+  setTimeout(() => (passphraseSaved.value = false), 1500);
+}
 
 const oldPassword = ref("");
 const newPassword = ref("");
@@ -147,6 +163,34 @@ const roleLabel = computed(() => {
           </span>
         </div>
         <p class="mt-1.5 text-xs text-muted">Your email and role are managed by an administrator.</p>
+      </div>
+    </section>
+
+    <!-- End-to-end encryption -->
+    <section class="mb-6 rounded-lg border border-subtle bg-card p-5 shadow-xs">
+      <h3 class="gn-eyebrow mb-4">End-to-end encryption</h3>
+      <p class="mb-3 max-w-prose text-sm text-secondary">
+        Set a shared passphrase to encrypt message text and recipient numbers before
+        they leave this browser. The server and database only ever store ciphertext.
+        The passphrase is kept in this browser only and never sent anywhere — enter the
+        same one on every device (Web App and Phone App) that must read the messages.
+      </p>
+      <div class="flex flex-wrap items-center gap-2">
+        <input
+          v-model="passphrase"
+          type="password"
+          class="gn-input max-w-xs font-mono !text-xs"
+          placeholder="Encryption passphrase"
+          autocomplete="off"
+        />
+        <button class="gn-btn-pri" :disabled="!passphrase.trim()" @click="savePassphrase">
+          {{ passphraseSaved ? "Saved" : "Save" }}
+        </button>
+        <button v-if="getPassphrase()" class="gn-btn-sec" @click="clearPassphrase">Clear</button>
+        <span
+          class="rounded-sm px-2 py-0.5 font-mono text-xs"
+          :class="passphrase.trim() ? 'bg-success-tint text-success' : 'bg-sunken text-muted'"
+        >{{ passphrase.trim() ? "Encryption on" : "Off" }}</span>
       </div>
     </section>
 

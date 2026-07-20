@@ -1,11 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Sending and receiving SMS -->
+    <!-- Sending and receiving SMS (incl. binary data SMS) -->
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
+    <!-- Receiving MMS (WAP push notification + MMS) -->
+    <uses-permission android:name="android.permission.RECEIVE_MMS" />
+    <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
     <!-- Placing outbound calls remotely -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- Observing the call state for the incoming/outgoing call log -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />
     <!-- Optional: needed to choose a specific SIM on dual-SIM devices -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -40,7 +46,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Incoming SMS broadcast receiver -->
+        <!-- Incoming SMS + binary data SMS broadcast receiver -->
         <receiver
             android:name=".SmsReceiver"
             android:exported="true"
@@ -48,12 +54,50 @@
             <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
+            <!-- Binary data SMS. Android delivers these per destination port; the
+                 scheme filter catches data SMS regardless of the port used. -->
+            <intent-filter android:priority="999">
+                <action android:name="android.intent.action.DATA_SMS_RECEIVED" />
+                <data android:scheme="sms" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Incoming MMS (WAP push) receiver -->
+        <receiver
+            android:name=".MmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_WAP_PUSH">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.WAP_PUSH_RECEIVED" />
+                <data android:mimeType="application/vnd.wap.mms-message" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Incoming/outgoing call state receiver (feeds the call log) -->
+        <receiver
+            android:name=".CallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+                <action android:name="android.intent.action.NEW_OUTGOING_CALL" />
+            </intent-filter>
         </receiver>
 
         <!-- Receives send/delivery outcomes from PendingIntents (explicit) -->
         <receiver
             android:name=".SmsStatusReceiver"
             android:exported="false" />
+
+        <!-- Shares the composed MMS PDU with the platform MMS stack -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- Foreground service that keeps the gateway loop alive -->
         <service

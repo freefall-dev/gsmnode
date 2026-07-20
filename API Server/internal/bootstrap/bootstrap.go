@@ -51,6 +51,7 @@ func fText(name string, required bool) fieldDef {
 	return fieldDef{name: name, typ: "text", required: required}
 }
 func fNumber(name string) fieldDef { return fieldDef{name: name, typ: "number"} }
+func fBool(name string) fieldDef   { return fieldDef{name: name, typ: "bool"} }
 func fDate(name string, required bool) fieldDef {
 	return fieldDef{name: name, typ: "date", required: required}
 }

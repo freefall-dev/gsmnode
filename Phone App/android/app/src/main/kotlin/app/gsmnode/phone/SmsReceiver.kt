@@ -16,8 +16,14 @@ import androidx.core.content.ContextCompat
 class SmsReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
+        when (intent.action) {
+            Telephony.Sms.Intents.SMS_RECEIVED_ACTION -> handleTextSms(context, intent)
+            Telephony.Sms.Intents.DATA_SMS_RECEIVED_ACTION -> handleDataSms(context, intent)
+            else -> return
+        }
+    }
 
+    private fun handleTextSms(context: Context, intent: Intent) {
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
         if (messages.isEmpty()) return
 
@@ -30,15 +36,51 @@ class SmsReceiver : BroadcastReceiver() {
             timestamp = m.timestampMillis
         }
 
-        val payload = mapOf(
-            "from" to from,
-            "body" to body.toString(),
-            "timestamp" to timestamp,
-            // 0-based physical slot the message arrived on, or -1 if unknown
-            // (single-SIM device, or READ_PHONE_STATE not granted).
-            "simSlot" to receivingSlot(context, intent),
+        emit(
+            mapOf(
+                "type" to "sms",
+                "from" to from,
+                "body" to body.toString(),
+                "timestamp" to timestamp,
+                // 0-based physical slot the message arrived on, or -1 if unknown
+                // (single-SIM device, or READ_PHONE_STATE not granted).
+                "simSlot" to receivingSlot(context, intent),
+            )
+        )
+    }
+
+    /// Handles a binary data SMS: concatenates the PDUs' raw bytes and forwards
+    /// them base64-encoded, tagged with the destination port.
+    private fun handleDataSms(context: Context, intent: Intent) {
+        val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
+        if (messages.isEmpty()) return
+
+        val from = messages[0].displayOriginatingAddress ?: ""
+        var timestamp = System.currentTimeMillis()
+        val bytes = java.io.ByteArrayOutputStream()
+        for (m in messages) {
+            m.userData?.let { bytes.write(it) }
+            timestamp = m.timestampMillis
+        }
+        val port = intent.data?.port ?: -1
+        val payloadB64 = android.util.Base64.encodeToString(
+            bytes.toByteArray(), android.util.Base64.NO_WRAP
         )
 
+        emit(
+            mapOf(
+                "type" to "data",
+                "from" to from,
+                "body" to "",
+                "dataPayload" to payloadB64,
+                "dataPort" to port,
+                "timestamp" to timestamp,
+                "simSlot" to receivingSlot(context, intent),
+            )
+        )
+    }
+
+    private fun emit(payload: Map<String, Any?>) {
         // EventSink must be touched on the main thread.
         Handler(Looper.getMainLooper()).post {
             MainActivity.incomingSink?.success(payload)

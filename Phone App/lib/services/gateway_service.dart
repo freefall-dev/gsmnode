@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config.dart';
 import 'api_client.dart';
+import 'crypto_service.dart';
 import 'sms_service.dart';
 
 /// A single line in the on-screen activity log.
@@ -37,7 +38,12 @@ class GatewayService extends ChangeNotifier {
   Timer? _pingTimer;
   StreamSubscription<IncomingSms>? _incomingSub;
   StreamSubscription<SmsStatus>? _statusSub;
+  StreamSubscription<IncomingCall>? _callSub;
   bool _polling = false;
+
+  /// Rebuilt on each use so a passphrase change in Settings takes effect without
+  /// restarting the gateway. Encryption is off when no passphrase is set.
+  CryptoService get _crypto => CryptoService(api.storage.encPassphrase);
 
   void start() {
     if (_running) return;
@@ -53,6 +59,9 @@ class GatewayService extends ChangeNotifier {
     });
     _statusSub = sms.smsStatus().listen(_onStatus, onError: (e) {
       _log0('Status stream error: $e', error: true);
+    });
+    _callSub = sms.incomingCalls().listen(_onIncomingCall, onError: (e) {
+      _log0('Incoming call stream error: $e', error: true);
     });
 
     _pollTimer = Timer.periodic(AppConfig.pollInterval, (_) => _poll());
@@ -84,6 +93,7 @@ class GatewayService extends ChangeNotifier {
     _pingTimer?.cancel();
     _incomingSub?.cancel();
     _statusSub?.cancel();
+    _callSub?.cancel();
     sms.stopBackgroundService().catchError((_) {});
     _log0('Gateway stopped');
     notifyListeners();
@@ -96,15 +106,45 @@ class GatewayService extends ChangeNotifier {
       final messages = await api.pullMessages();
       for (final m in messages) {
         var handedOff = true;
-        for (final phone in m.phoneNumbers) {
+
+        // Decrypt recipients + text when the message is end-to-end encrypted.
+        // If we can't (no/wrong passphrase), fail the message rather than
+        // sending ciphertext over the radio.
+        List<String> recipients = m.phoneNumbers;
+        String text = m.textMessage;
+        if (m.encrypted) {
+          try {
+            recipients = [for (final p in m.phoneNumbers) await _crypto.decrypt(p)];
+            text = await _crypto.decrypt(m.textMessage);
+          } catch (e) {
+            await api.reportMessage(m.id, 'Failed',
+                error: 'decrypt failed (passphrase?): $e');
+            _log0('Decrypt failed for ${m.id}: $e', error: true);
+            continue;
+          }
+        }
+
+        for (final phone in recipients) {
           try {
             if (m.isCall) {
               await sms.placeCall(phone);
               _log0('Calling $phone');
-            } else {
-              await sms.sendSms(phone, m.textMessage,
+            } else if (m.isData) {
+              await sms.sendDataSms(phone, m.dataPayload, m.dataPort ?? 0,
                   simSlot: m.simNumber, messageId: m.id);
-              _log0('Sending to $phone: "${_short(m.textMessage)}"');
+              _log0('Sending data SMS to $phone (port ${m.dataPort ?? 0})');
+            } else if (m.isMms) {
+              await sms.sendMms(phone,
+                  subject: m.subject,
+                  text: text,
+                  attachments: m.attachments.map((a) => a.toJson()).toList(),
+                  simSlot: m.simNumber,
+                  messageId: m.id);
+              _log0('Sending MMS to $phone (${m.attachments.length} attachment(s))');
+            } else {
+              await sms.sendSms(phone, text,
+                  simSlot: m.simNumber, messageId: m.id);
+              _log0('Sending to $phone: "${_short(text)}"');
             }
           } catch (e) {
             handedOff = false;
@@ -170,12 +210,47 @@ class GatewayService extends ChangeNotifier {
 
   Future<void> _onIncoming(IncomingSms msg) async {
     final on = msg.simSlot != null ? ' on SIM ${msg.simSlot}' : '';
-    _log0('Received from ${msg.from}$on: "${_short(msg.body)}"');
+    final label = msg.type == 'sms' ? '' : ' [${msg.type}]';
+    _log0('Received$label from ${msg.from}$on: "${_short(msg.body)}"');
     try {
-      await api.postInbox(msg.from, msg.body,
-          receivedAt: msg.timestamp, simSlot: msg.simSlot);
+      // Encrypt sender + body when a passphrase is set, so the server only ever
+      // stores ciphertext. Data payloads / MMS attachments are left as-is.
+      final crypto = _crypto;
+      final enc = crypto.enabled && msg.type != 'data';
+      final from = enc ? await crypto.encrypt(msg.from) : msg.from;
+      final body = enc ? await crypto.encrypt(msg.body) : msg.body;
+      await api.postInbox(
+        from,
+        body,
+        type: msg.type,
+        receivedAt: msg.timestamp,
+        simSlot: msg.simSlot,
+        encrypted: enc,
+        dataPayload: msg.type == 'data' ? msg.dataPayload : null,
+        dataPort: msg.type == 'data' ? msg.dataPort : null,
+        subject: msg.type == 'mms' ? msg.subject : null,
+        attachments: msg.type == 'mms' ? msg.attachments : null,
+      );
     } catch (e) {
       _log0('Forward inbox failed: $e', error: true);
+    }
+  }
+
+  Future<void> _onIncomingCall(IncomingCall call) async {
+    final on = call.simSlot != null ? ' on SIM ${call.simSlot}' : '';
+    _log0('${call.direction == "outgoing" ? "Outgoing" : "Incoming"} call '
+        '${call.number}$on — ${call.status}');
+    try {
+      await api.reportCall(
+        call.number,
+        direction: call.direction,
+        status: call.status,
+        simSlot: call.simSlot,
+        duration: call.duration,
+        startedAt: call.timestamp,
+      );
+    } catch (e) {
+      _log0('Report call failed: $e', error: true);
     }
   }
 

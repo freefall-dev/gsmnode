@@ -8,6 +8,7 @@ class Storage {
   static const _kDeviceId = 'device_id';
   static const _kDeviceName = 'device_name';
   static const _kUserEmail = 'user_email';
+  static const _kEncPassphrase = 'enc_passphrase';
 
   final SharedPreferences _prefs;
   Storage(this._prefs);
@@ -33,6 +34,11 @@ class Storage {
 
   String? get userEmail => _prefs.getString(_kUserEmail);
   set userEmail(String? v) => _set(_kUserEmail, v);
+
+  /// Shared E2E passphrase. Kept only on-device; must match the one entered in
+  /// the Web App (and any other device) that reads these messages.
+  String get encPassphrase => _prefs.getString(_kEncPassphrase) ?? '';
+  set encPassphrase(String v) => _set(_kEncPassphrase, v.isEmpty ? null : v);
 
   bool get isRegistered => (deviceToken ?? '').isNotEmpty;
 

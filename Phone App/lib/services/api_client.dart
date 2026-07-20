@@ -103,19 +103,56 @@ class ApiClient {
     _decode(res);
   }
 
-  /// Posts an incoming SMS to the server's inbox. [simSlot] is the 0-based slot
-  /// the message arrived on, when the device could attribute it.
+  /// Posts an incoming SMS, data SMS, or MMS to the server's inbox. [type] is
+  /// 'sms' (default), 'data', or 'mms'. [simSlot] is the 0-based slot the message
+  /// arrived on. When [encrypted] is true, phone_number + message are already
+  /// ciphertext.
   Future<void> postInbox(String phoneNumber, String message,
-      {DateTime? receivedAt, int? simSlot}) async {
+      {String type = 'sms',
+      DateTime? receivedAt,
+      int? simSlot,
+      bool encrypted = false,
+      String? dataPayload,
+      int? dataPort,
+      String? subject,
+      List<Map<String, dynamic>>? attachments}) async {
     final res = await _http.post(
       _uri('/api/mobile/v1/inbox'),
       headers: _headers(storage.deviceToken),
       body: jsonEncode({
+        'type': type,
         'phone_number': phoneNumber,
         'message': message,
+        'encrypted': encrypted,
         if (receivedAt != null)
           'received_at': receivedAt.toUtc().toIso8601String(),
         if (simSlot != null) 'sim_slot': simSlot,
+        if (dataPayload != null) 'data_payload': dataPayload,
+        if (dataPort != null) 'data_port': dataPort,
+        if (subject != null) 'subject': subject,
+        if (attachments != null) 'attachments': attachments,
+      }),
+    );
+    _decode(res);
+  }
+
+  /// Reports an incoming/outgoing call event to the server's call log.
+  Future<void> reportCall(String phoneNumber,
+      {required String direction,
+      required String status,
+      int? simSlot,
+      int? duration,
+      DateTime? startedAt}) async {
+    final res = await _http.post(
+      _uri('/api/mobile/v1/calls'),
+      headers: _headers(storage.deviceToken),
+      body: jsonEncode({
+        'phone_number': phoneNumber,
+        'direction': direction,
+        'status': status,
+        if (simSlot != null) 'sim_slot': simSlot,
+        if (duration != null) 'duration': duration,
+        if (startedAt != null) 'started_at': startedAt.toUtc().toIso8601String(),
       }),
     );
     _decode(res);
