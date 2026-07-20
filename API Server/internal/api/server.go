@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"smsgateway/apiserver/internal/auth"
 	"smsgateway/apiserver/internal/config"
 	"smsgateway/apiserver/internal/pb"
 )
@@ -25,12 +24,21 @@ const (
 type Server struct {
 	cfg config.Config
 	pb  *pb.Client
-	jwt *auth.Manager
 }
 
 // New constructs a Server.
-func New(cfg config.Config, client *pb.Client, jwt *auth.Manager) *Server {
-	return &Server{cfg: cfg, pb: client, jwt: jwt}
+func New(cfg config.Config, client *pb.Client) *Server {
+	return &Server{cfg: cfg, pb: client}
+}
+
+// pbSettings snapshots the PocketBase connection for the settings endpoints.
+func (s *Server) pbSettings() (url, adminEmail, adminPassword string) {
+	return s.pb.Settings()
+}
+
+// setPBConfig retargets the PocketBase connection at runtime.
+func (s *Server) setPBConfig(url, adminEmail, adminPassword string) {
+	s.pb.SetConfig(url, adminEmail, adminPassword)
 }
 
 // Handler returns the root HTTP handler with all routes registered.
@@ -49,11 +57,27 @@ func (s *Server) Handler() http.Handler {
 
 	// Health (public)
 	mux.HandleFunc("GET /api/health", s.handleHealth)
+	mux.HandleFunc("GET /api/status", s.handleStatus)
 
-	// Client / 3rd-party API (JWT auth) — used by the Web App and integrators.
+	// Auth — proxied to the PocketBase kept behind this server. The token the
+	// client receives is PocketBase's own; PocketBase's address is never exposed.
 	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
-	mux.HandleFunc("POST /api/auth/refresh", s.requireUser(s.handleRefresh))
+	mux.HandleFunc("POST /api/auth/refresh", s.handleRefresh)
+	mux.HandleFunc("GET /api/auth/validate", s.handleValidate)
 	mux.HandleFunc("GET /api/auth/me", s.requireUser(s.handleMe))
+
+	// User management — gated on the caller being a manager (admin or superadmin).
+	// Only a superadmin may create, edit, or delete superadmins.
+	mux.HandleFunc("GET /api/users", s.requireManager(s.handleListUsers))
+	mux.HandleFunc("POST /api/users", s.requireManager(s.handleCreateUser))
+	mux.HandleFunc("PATCH /api/users/{id}", s.requireManager(s.handleUpdateUser))
+	mux.HandleFunc("DELETE /api/users/{id}", s.requireManager(s.handleDeleteUser))
+
+	// PocketBase connection settings — superadmin only. These do NOT require the
+	// service account to already be configured (they exist to configure it).
+	mux.HandleFunc("GET /api/admin/pb-config", s.requireSuperadminAuth(s.handleGetPBConfig))
+	mux.HandleFunc("POST /api/admin/pb-config/test", s.requireSuperadminAuth(s.handleTestPBConfig))
+	mux.HandleFunc("PUT /api/admin/pb-config", s.requireSuperadminAuth(s.handleUpdatePBConfig))
 
 	mux.HandleFunc("GET /api/devices", s.requireUser(s.handleListDevices))
 	mux.HandleFunc("DELETE /api/devices/{id}", s.requireUser(s.handleDeleteDevice))
@@ -168,8 +192,8 @@ const (
 
 // userFromCtx returns the authenticated user id/email from the request context.
 func userFromCtx(ctx context.Context) (id, email string) {
-	if c, ok := ctx.Value(ctxUser).(*auth.Claims); ok {
-		return c.Subject, c.Email
+	if c, ok := ctx.Value(ctxUser).(*callerIdentity); ok {
+		return c.ID, c.Email
 	}
 	return "", ""
 }
@@ -182,21 +206,15 @@ func deviceFromCtx(ctx context.Context) pb.Record {
 	return nil
 }
 
-// requireUser wraps a handler to require a valid client JWT.
+// requireUser wraps a handler to require a valid PocketBase user token. The
+// resolved identity (id, email, name, role) is stashed on the request context.
 func (s *Server) requireUser(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := bearerToken(r)
-		if token == "" {
-			writeError(w, http.StatusUnauthorized, "missing bearer token")
+		who, ok := s.authenticate(w, r)
+		if !ok {
 			return
 		}
-		claims, err := s.jwt.Verify(token)
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "invalid or expired token")
-			return
-		}
-		ctx := context.WithValue(r.Context(), ctxUser, claims)
-		next(w, r.WithContext(ctx))
+		next(w, r.WithContext(context.WithValue(r.Context(), ctxUser, who)))
 	}
 }
 

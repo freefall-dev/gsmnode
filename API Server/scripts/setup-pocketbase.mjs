@@ -156,6 +156,23 @@ function definitions(ids) {
   ];
 }
 
+// The API Server gates the panel and management endpoints on a users.role
+// select field (user | admin | superadmin). It is added to the existing auth
+// collection by appending to its current fields, so the built-in email/password
+// system fields are preserved. Idempotent: a no-op once role exists.
+async function ensureUsersRole(users) {
+  if ((users.fields || []).some((fld) => fld.name === "role")) {
+    console.log('Collection "users" already has a role field.');
+    return;
+  }
+  const fields = [
+    ...users.fields,
+    { name: "role", type: "select", required: false, maxSelect: 1, values: ["user", "admin", "superadmin"] },
+  ];
+  await api("PATCH", `/api/collections/${users.id}`, { fields });
+  console.log('Added role field to "users" collection.');
+}
+
 async function main() {
   await authenticate();
 
@@ -163,6 +180,7 @@ async function main() {
   if (!collections.users) {
     throw new Error('The default "users" auth collection was not found in PocketBase.');
   }
+  await ensureUsersRole(collections.users);
 
   // Resolve collection ids needed for relation fields. devices must exist before
   // messages/inbox/webhooks reference it, so create in order, refreshing ids.

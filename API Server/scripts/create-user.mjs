@@ -10,14 +10,22 @@ const BASE = (process.env.POCKETBASE_URL || "http://10.2.1.10:8028").replace(/\/
 const EMAIL = process.env.PB_ADMIN_EMAIL;
 const PASSWORD = process.env.PB_ADMIN_PASSWORD;
 
-const [, , userEmail, userPassword, userName] = process.argv;
+const [, , userEmail, userPassword, userName, userRole] = process.argv;
+
+const ROLES = ["user", "admin", "superadmin"];
 
 if (!EMAIL || !PASSWORD) {
   console.error("Set PB_ADMIN_EMAIL and PB_ADMIN_PASSWORD environment variables.");
   process.exit(1);
 }
 if (!userEmail || !userPassword) {
-  console.error('Usage: node scripts/create-user.mjs <email> <password> ["name"]');
+  console.error('Usage: node scripts/create-user.mjs <email> <password> ["name"] [role]');
+  console.error(`  role is one of: ${ROLES.join(", ")} (default: user)`);
+  process.exit(1);
+}
+const role = userRole || "user";
+if (!ROLES.includes(role)) {
+  console.error(`Invalid role "${role}". Must be one of: ${ROLES.join(", ")}`);
   process.exit(1);
 }
 
@@ -43,8 +51,9 @@ const user = await api("POST", "/api/collections/users/records", {
   password: userPassword,
   passwordConfirm: userPassword,
   name: userName || "",
+  role,
   emailVisibility: true,
   verified: true,
 }, auth.token);
 
-console.log(`Created user ${user.email} (id: ${user.id}).`);
+console.log(`Created user ${user.email} (role: ${role}, id: ${user.id}).`);

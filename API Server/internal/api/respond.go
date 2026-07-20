@@ -53,6 +53,24 @@ func writeUpstreamError(w http.ResponseWriter, err error) {
 	writeError(w, http.StatusInternalServerError, "internal error")
 }
 
+// writePBRelay relays a PocketBase error to the client verbatim (status + raw
+// JSON body), so field-level validation errors — a duplicate email, a bad role
+// value — reach the panel intact. Falls back to writeUpstreamError otherwise.
+func writePBRelay(w http.ResponseWriter, err error) {
+	var apiErr *pb.APIError
+	if errors.As(err, &apiErr) && apiErr.Body != "" {
+		status := apiErr.Status
+		if status < 400 {
+			status = http.StatusBadGateway
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(apiErr.Body))
+		return
+	}
+	writeUpstreamError(w, err)
+}
+
 // decodeJSON reads and decodes a JSON request body into v.
 func decodeJSON(r *http.Request, v any) error {
 	defer io.Copy(io.Discard, r.Body)

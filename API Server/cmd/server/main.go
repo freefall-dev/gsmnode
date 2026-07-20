@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"smsgateway/apiserver/internal/api"
-	"smsgateway/apiserver/internal/auth"
 	"smsgateway/apiserver/internal/config"
 	"smsgateway/apiserver/internal/pb"
 )
@@ -26,8 +25,7 @@ func main() {
 	cfg := config.Load()
 
 	client := pb.New(cfg.PocketBaseURL, cfg.PBAdminEmail, cfg.PBAdminPass)
-	jwtMgr := auth.NewManager(cfg.JWTSecret, cfg.JWTAccessTTL)
-	srv := api.New(cfg, client, jwtMgr)
+	srv := api.New(cfg, client)
 
 	// Background worker that fails messages no device processed in time.
 	workerCtx, workerCancel := context.WithCancel(context.Background())

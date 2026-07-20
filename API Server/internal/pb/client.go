@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -50,14 +51,14 @@ func NotFound(err error) bool {
 
 // Client is a PocketBase REST client with automatic superuser token refresh.
 type Client struct {
+	http *http.Client
+
+	mu         sync.Mutex // guards baseURL/creds (retargetable at runtime) + cached token
 	baseURL    string
 	adminEmail string
 	adminPass  string
-	http       *http.Client
-
-	mu        sync.Mutex
-	token     string
-	tokenExp  time.Time
+	token      string
+	tokenExp   time.Time
 }
 
 // New creates a PocketBase client.
@@ -70,31 +71,72 @@ func New(baseURL, adminEmail, adminPass string) *Client {
 	}
 }
 
+// url returns the current base URL under lock.
+func (c *Client) url() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.baseURL
+}
+
+// Configured reports whether service-account credentials are set. Every
+// privileged flow (user management, admin CRUD) runs through them.
+func (c *Client) Configured() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.adminEmail != "" && c.adminPass != ""
+}
+
+// Settings snapshots the current PocketBase connection for the settings panel.
+func (c *Client) Settings() (baseURL, adminEmail, adminPass string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.baseURL, c.adminEmail, c.adminPass
+}
+
+// SetConfig retargets the client at a new PocketBase and/or new service-account
+// credentials, invalidating any cached superuser token.
+func (c *Client) SetConfig(baseURL, adminEmail, adminPass string) {
+	c.mu.Lock()
+	c.baseURL = baseURL
+	c.adminEmail = adminEmail
+	c.adminPass = adminPass
+	c.token = "" // force re-auth against the new target
+	c.tokenExp = time.Time{}
+	c.mu.Unlock()
+}
+
 // AuthResult is returned by AuthWithPassword.
 type AuthResult struct {
 	Token  string `json:"token"`
 	Record Record `json:"record"`
 }
 
-// authenticate logs in as a superuser and caches the token.
+// authenticate logs in as a superuser and caches the token. It never holds the
+// lock across the network call, so a concurrent SetConfig cannot deadlock it.
 func (c *Client) authenticate(ctx context.Context) (string, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.token != "" && time.Now().Before(c.tokenExp) {
-		return c.token, nil
+		tok := c.token
+		c.mu.Unlock()
+		return tok, nil
 	}
+	email, pass := c.adminEmail, c.adminPass
+	c.mu.Unlock()
 
-	body := map[string]string{"identity": c.adminEmail, "password": c.adminPass}
+	body := map[string]string{"identity": email, "password": pass}
 	var res AuthResult
 	if err := c.do(ctx, http.MethodPost,
 		"/api/collections/_superusers/auth-with-password", "", body, &res); err != nil {
 		return "", fmt.Errorf("superuser auth: %w", err)
 	}
+
+	c.mu.Lock()
 	c.token = res.Token
 	// PocketBase superuser tokens are long-lived; refresh conservatively.
 	c.tokenExp = time.Now().Add(10 * time.Minute)
-	return c.token, nil
+	tok := c.token
+	c.mu.Unlock()
+	return tok, nil
 }
 
 // AuthWithPassword verifies credentials against an auth collection (e.g. "users")
@@ -112,6 +154,60 @@ func (c *Client) AuthWithPassword(ctx context.Context, collection, identity, pas
 		return nil, err
 	}
 	return &res, nil
+}
+
+// AuthRefresh validates a user's own auth token by asking PocketBase to refresh
+// it, returning the user record and the HTTP status. A non-200 status (with a
+// nil error) means the token is invalid or expired — callers branch on that
+// rather than treating it as a transport failure. Because the token is resolved
+// against PocketBase on every request, a role change or a deletion takes effect
+// immediately instead of lingering until the token would expire.
+func (c *Client) AuthRefresh(ctx context.Context, collection, userToken string) (*AuthResult, int, error) {
+	path := "/api/collections/" + url.PathEscape(collection) + "/auth-refresh"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url()+path, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", userToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, resp.StatusCode, nil
+	}
+	var res AuthResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return &res, resp.StatusCode, nil
+}
+
+// SuperuserAuth performs a one-off superuser auth-with-password against an
+// arbitrary PocketBase, returning the HTTP status. Used by the settings panel to
+// probe a candidate connection without disturbing the live client.
+func SuperuserAuth(ctx context.Context, client *http.Client, baseURL, email, password string) (int, error) {
+	body, _ := json.Marshal(map[string]string{"identity": email, "password": password})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		strings.TrimRight(baseURL, "/")+"/api/collections/_superusers/auth-with-password", bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return resp.StatusCode, fmt.Errorf("superuser auth failed: HTTP %d", resp.StatusCode)
+	}
+	return resp.StatusCode, nil
 }
 
 // Create inserts a record into a collection.
@@ -228,7 +324,7 @@ func (c *Client) do(ctx context.Context, method, path, token string, body, out a
 		reader = bytes.NewReader(b)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
+	req, err := http.NewRequestWithContext(ctx, method, c.url()+path, reader)
 	if err != nil {
 		return err
 	}

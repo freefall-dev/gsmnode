@@ -1,3 +1,6 @@
+// Package auth mints the opaque tokens used to authenticate registered mobile
+// devices. Client (user) sessions no longer live here — those now use the
+// PocketBase token proxied by the API Server.
 package auth
 
 import (
