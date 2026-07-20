@@ -107,7 +107,9 @@ function logout() {
       </header>
 
       <main class="flex-1 p-7">
-        <RouterView />
+        <div class="mx-auto w-full max-w-5xl">
+          <RouterView />
+        </div>
       </main>
     </div>
   </div>
