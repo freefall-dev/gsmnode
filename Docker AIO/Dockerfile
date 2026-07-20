@@ -13,8 +13,13 @@
 #     -e PB_ADMIN_EMAIL=admin@example.com \
 #     -e PB_ADMIN_PASSWORD=change-me \
 #     -e JWT_SECRET=change-me-to-a-long-random-string \
+#     -e GSMNODE_SUPERADMIN_EMAIL=owner@example.com \
+#     -e GSMNODE_SUPERADMIN_PASSWORD=change-me \
 #     -v gsmnode_pb:/pb/pb_data \
 #     gsmnode-aio
+#
+# On first boot the API Server reconciles the PocketBase schema and creates the
+# app super-admin from GSMNODE_SUPERADMIN_*. Both steps are idempotent.
 #
 # Then: web app on http://host/  and PocketBase admin on http://host:8070/_/
 
@@ -152,10 +157,13 @@ ENV API_ADDR=:8080 \
     POCKETBASE_URL=http://127.0.0.1:8070 \
     JWT_ACCESS_TTL=24h \
     MESSAGE_TTL=5m \
-    CORS_ALLOW_ORIGINS=http://localhost:8090
+    CORS_ALLOW_ORIGINS=http://localhost:8090 \
+    PB_BOOTSTRAP=true
 
 # Required at runtime (no safe defaults): PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD, and
 # JWT_SECRET (a long random string). Pass them with `docker run -e ...`.
+# Optional: GSMNODE_SUPERADMIN_EMAIL / GSMNODE_SUPERADMIN_PASSWORD create the
+# first app super-admin on boot; PB_BOOTSTRAP=false skips schema setup.
 
 VOLUME /pb/pb_data
 # 80 = Web App, 8070 = PocketBase admin, 8080 = API Server + embedded API panel.

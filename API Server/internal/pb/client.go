@@ -139,6 +139,14 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	return tok, nil
 }
 
+// Authenticate eagerly obtains a superuser token, surfacing bad credentials or
+// an unreachable PocketBase early. Raw and the typed helpers also authenticate
+// on demand, so calling this is optional.
+func (c *Client) Authenticate(ctx context.Context) error {
+	_, err := c.authenticate(ctx)
+	return err
+}
+
 // AuthWithPassword verifies credentials against an auth collection (e.g. "users")
 // and returns the user record. Used to validate logins; the API Server then
 // issues its own JWT.
@@ -311,6 +319,58 @@ func (c *Client) FindFirst(ctx context.Context, collection, filter, sort string)
 		return nil, nil
 	}
 	return res.Items[0], nil
+}
+
+// Raw performs an authenticated request against PocketBase and returns the raw
+// response body and HTTP status. Unlike do, a non-2xx status is not an error —
+// the caller inspects the status itself. Used by the bootstrap package, which
+// reconciles collections and tolerates the expected 4xx (e.g. a duplicate). On a
+// 401 it drops the cached token, re-authenticates once, and retries.
+func (c *Client) Raw(ctx context.Context, method, path string, payload any) ([]byte, int, error) {
+	raw, status, err := c.rawAttempt(ctx, method, path, payload)
+	if err != nil {
+		return nil, 0, err
+	}
+	if status == http.StatusUnauthorized {
+		c.mu.Lock()
+		c.token = ""
+		c.tokenExp = time.Time{}
+		c.mu.Unlock()
+		return c.rawAttempt(ctx, method, path, payload)
+	}
+	return raw, status, nil
+}
+
+func (c *Client) rawAttempt(ctx context.Context, method, path string, payload any) ([]byte, int, error) {
+	token, err := c.authenticate(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	var reader io.Reader
+	if payload != nil {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return nil, 0, err
+		}
+		reader = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.url()+path, reader)
+	if err != nil {
+		return nil, 0, err
+	}
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", token)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	return raw, resp.StatusCode, nil
 }
 
 // do performs an HTTP request against PocketBase and decodes the JSON response.

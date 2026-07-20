@@ -23,6 +23,19 @@ type Config struct {
 	WebAppURL     string
 	AllowOrigins  []string
 	MessageTTL    time.Duration
+
+	// Bootstrap, when true, has the server reconcile the PocketBase schema and
+	// ensure the super-admin on startup (see internal/bootstrap).
+	Bootstrap          bool
+	SuperAdminEmail    string
+	SuperAdminPassword string
+	SuperAdminName     string
+}
+
+// AdminConfigured reports whether the PocketBase service-account credentials are
+// set. Bootstrap and every privileged flow authenticate with them.
+func (c Config) AdminConfigured() bool {
+	return c.PBAdminEmail != "" && c.PBAdminPass != ""
 }
 
 // Load reads configuration from environment variables, applying sensible
@@ -40,6 +53,13 @@ func Load() Config {
 		WebAppURL:     strings.TrimRight(getenv("WEBAPP_URL", "http://localhost:8090"), "/"),
 		AllowOrigins:  splitCSV(getenv("CORS_ALLOW_ORIGINS", "*")),
 		MessageTTL:    getdur("MESSAGE_TTL", 5*time.Minute),
+
+		// Schema + super-admin bootstrap on boot (idempotent). The super-admin is
+		// created only when both email and password are set.
+		Bootstrap:          boolEnv("PB_BOOTSTRAP", true),
+		SuperAdminEmail:    firstEnv("GSMNODE_SUPERADMIN_EMAIL", "SUPERADMIN_EMAIL"),
+		SuperAdminPassword: firstEnv("GSMNODE_SUPERADMIN_PASSWORD", "SUPERADMIN_PASSWORD"),
+		SuperAdminName:     getenv("GSMNODE_SUPERADMIN_NAME", "Administrator"),
 	}
 
 	if cfg.PBAdminEmail == "" || cfg.PBAdminPass == "" {
@@ -53,6 +73,31 @@ func getenv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// firstEnv returns the value of the first set (non-empty) key, else "".
+func firstEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// boolEnv reads a boolean environment variable, accepting the common truthy and
+// falsey spellings and falling back to def when unset or unrecognized.
+func boolEnv(key string, def bool) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "":
+		return def
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return def
+	}
 }
 
 func getdur(key string, def time.Duration) time.Duration {

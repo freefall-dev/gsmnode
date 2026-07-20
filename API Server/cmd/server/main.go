@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"smsgateway/apiserver/internal/api"
+	"smsgateway/apiserver/internal/bootstrap"
 	"smsgateway/apiserver/internal/config"
 	"smsgateway/apiserver/internal/pb"
 )
@@ -25,6 +26,27 @@ func main() {
 	cfg := config.Load()
 
 	client := pb.New(cfg.PocketBaseURL, cfg.PBAdminEmail, cfg.PBAdminPass)
+
+	// Bring PocketBase up to the expected schema (create missing collections,
+	// reconcile existing ones) and ensure the super-admin. Idempotent, so it runs
+	// on every boot. Non-fatal: a fresh PocketBase that isn't reachable yet, or a
+	// bad service account, must not stop the server from coming up so an operator
+	// can fix the connection.
+	if cfg.Bootstrap && cfg.AdminConfigured() {
+		bootCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		if err := bootstrap.Run(bootCtx, client, bootstrap.Options{
+			UsersCollection:    "users",
+			SuperAdminEmail:    cfg.SuperAdminEmail,
+			SuperAdminPassword: cfg.SuperAdminPassword,
+			SuperAdminName:     cfg.SuperAdminName,
+		}); err != nil {
+			log.Printf("WARNING: bootstrap failed: %v", err)
+		} else {
+			log.Println("bootstrap: PocketBase schema ready")
+		}
+		cancel()
+	}
+
 	srv := api.New(cfg, client)
 
 	// Background worker that fails messages no device processed in time.

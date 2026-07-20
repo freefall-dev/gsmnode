@@ -10,8 +10,9 @@ name: gsmnode
 # Traffic flow (browser): Web App BFF --/api--> API Server --> PocketBase.
 #
 # On first boot PocketBase upserts the superuser from PB_ADMIN_*, which the API
-# Server then uses to authenticate. The upsert is idempotent, so restarts and
-# upgrades are safe.
+# Server then uses to authenticate. The API Server, in turn, reconciles the
+# schema and creates the app super-admin from GSMNODE_SUPERADMIN_*. Every step is
+# idempotent, so restarts and upgrades are safe.
 
 services:
   pocketbase:
@@ -56,6 +57,14 @@ services:
       JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
       MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:8090}"
+      # Schema + super-admin bootstrap on boot (idempotent). Set PB_BOOTSTRAP=false
+      # to skip it once the database is established. The super-admin is the first
+      # app login (role "superadmin"), created only when both email and password
+      # are set — distinct from the PocketBase superuser above.
+      PB_BOOTSTRAP: "${PB_BOOTSTRAP:-true}"
+      GSMNODE_SUPERADMIN_EMAIL: "${GSMNODE_SUPERADMIN_EMAIL:-}"
+      GSMNODE_SUPERADMIN_PASSWORD: "${GSMNODE_SUPERADMIN_PASSWORD:-}"
+      GSMNODE_SUPERADMIN_NAME: "${GSMNODE_SUPERADMIN_NAME:-Administrator}"
     ports:
       # Localhost-only by default (the Web App reaches it over the internal
       # network). Set API_BIND=0.0.0.0 to expose the API panel on the network.
