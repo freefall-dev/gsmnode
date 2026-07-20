@@ -1,17 +1,26 @@
 <script setup>
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
-import { Sun, Moon, LogOut } from "@lucide/vue";
+import { Sun, Moon, Monitor, LogOut } from "@lucide/vue";
 import { api } from "../api";
 import { auth } from "../store/auth";
-import { theme, applyTheme } from "../theme";
+import { themePref, setThemePref } from "../theme";
 import PageHeader from "../components/PageHeader.vue";
+import UsersManager from "../components/UsersManager.vue";
+import OrgManager from "../components/OrgManager.vue";
 
 const router = useRouter();
 
 // Identity is already in the auth store from login; Settings edits a copy of it
 // and pushes changes back so the header stays in sync.
 const user = computed(() => auth.state.user || {});
+
+// Managers (admins and superadmins) get the Users + Organization sections; the
+// API Server enforces the finer-grained scoping (an admin only sees their org).
+const isManager = computed(() => ["admin", "superadmin"].includes(user.value.role));
+// An org-less, non-superadmin user gets the Organization section too, so they can
+// stand up their own organization (which promotes them to its admin).
+const showCreateOwn = computed(() => user.value.role !== "superadmin" && !user.value.organization);
 
 // --- Account: display name ---
 
@@ -86,6 +95,7 @@ async function savePassword() {
 const themes = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
 ];
 
 // --- Session ---
@@ -181,20 +191,29 @@ const roleLabel = computed(() => {
     <section class="mb-6 rounded-lg border border-subtle bg-card p-5 shadow-xs">
       <h3 class="gn-eyebrow mb-4">Appearance</h3>
       <label class="mb-1.5 block text-sm font-medium text-secondary">Theme</label>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
         <button
           v-for="opt in themes"
           :key="opt.value"
           class="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
-          :class="theme === opt.value
+          :class="themePref === opt.value
             ? 'border-brand bg-brand-tint text-brand-active'
             : 'border-strong text-secondary hover:bg-sunken hover:text-primary'"
-          @click="applyTheme(opt.value)"
+          @click="setThemePref(opt.value)"
         >
           <component :is="opt.icon" class="h-4 w-4" />{{ opt.label }}
         </button>
       </div>
+      <p class="mt-1.5 text-xs text-muted">“System” follows your device’s light/dark setting.</p>
     </section>
+
+    <!-- Administration: user management (managers) + organization (managers, or
+         an org-less user creating their own). -->
+    <template v-if="isManager || showCreateOwn">
+      <h3 class="gn-eyebrow mb-3">{{ isManager ? "Administration" : "Organization" }}</h3>
+      <div v-if="isManager" class="mb-6"><UsersManager /></div>
+      <div class="mb-6"><OrgManager /></div>
+    </template>
 
     <!-- Session -->
     <section class="rounded-lg border border-subtle bg-card p-5 shadow-xs">

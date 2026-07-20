@@ -77,8 +77,21 @@ func (s *Server) handleListOrgs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"organizations": out})
 }
 
-// POST /api/orgs — create an organization (superadmin only). Body: {name}.
+// POST /api/orgs — create an organization. Body: {name}. A superadmin may create
+// any number of organizations and is not attached to them (they manage every
+// tenant centrally). Any other user may create one only if they don't already
+// belong to an organization, and they become its admin and first member — the
+// self-service path for standing up a new tenant.
 func (s *Server) handleCreateOrg(w http.ResponseWriter, r *http.Request) {
+	if !s.pb.Configured() {
+		writeError(w, http.StatusServiceUnavailable, "organizations are not configured on the server")
+		return
+	}
+	who := caller(r)
+	if !who.isSuperadmin() && who.OrgID != "" {
+		writeError(w, http.StatusForbidden, "you already belong to an organization")
+		return
+	}
 	name, ok := decodeOrgName(w, r)
 	if !ok {
 		return
@@ -88,14 +101,36 @@ func (s *Server) handleCreateOrg(w http.ResponseWriter, r *http.Request) {
 		writePBRelay(w, err) // surfaces PocketBase validation (e.g. duplicate name)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"organization": recordToOrgView(rec)})
+	org := recordToOrgView(rec)
+
+	// A non-superadmin creator becomes the admin of, and first member of, the org
+	// they just made. If that promotion fails, roll the org back so we never leave
+	// a stranded organization that nobody can administer.
+	if !who.isSuperadmin() {
+		if _, err := s.pb.Update(r.Context(), colUsers, who.ID, map[string]any{
+			"organization": org.ID,
+			"role":         roleAdmin,
+		}); err != nil {
+			_ = s.pb.Delete(r.Context(), colOrgs, org.ID)
+			writePBRelay(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"organization": org})
 }
 
-// PATCH /api/orgs/{id} — rename an organization (superadmin only). Body: {name}.
+// PATCH /api/orgs/{id} — rename an organization (manager only). A superadmin may
+// rename any organization; an admin may rename only their own. Body: {name}.
 func (s *Server) handleUpdateOrg(w http.ResponseWriter, r *http.Request) {
+	who := caller(r)
 	id := r.PathValue("id")
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "missing organization id")
+		return
+	}
+	// An admin is scoped to their own organization; a superadmin spans all.
+	if !who.isSuperadmin() && (who.OrgID == "" || id != who.OrgID) {
+		writeError(w, http.StatusForbidden, "you can only rename your own organization")
 		return
 	}
 	name, ok := decodeOrgName(w, r)
@@ -110,25 +145,58 @@ func (s *Server) handleUpdateOrg(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"organization": recordToOrgView(rec)})
 }
 
-// DELETE /api/orgs/{id} — delete an organization (superadmin only). Refused
-// while the org still has members, to avoid silently orphaning users.
+// DELETE /api/orgs/{id} — delete an organization (manager only). A superadmin may
+// delete any organization, but only once it has no members. An admin may delete
+// only their own organization, and only when they are its sole member: the admin
+// is detached and demoted back to a plain user, then the org is removed. Either
+// path refuses to silently orphan other members.
 func (s *Server) handleDeleteOrg(w http.ResponseWriter, r *http.Request) {
+	who := caller(r)
 	id := r.PathValue("id")
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "missing organization id")
 		return
 	}
 
-	// Guard: block deletion while any user still belongs to this org.
-	members, err := s.pb.List(r.Context(), colUsers,
-		pb.ListOptions{Filter: "organization = " + pbQuote(id), PerPage: 1})
-	if err != nil {
-		writeUpstreamError(w, err)
-		return
-	}
-	if members.TotalItems > 0 {
-		writeError(w, http.StatusConflict, "organization still has members; reassign or remove them first")
-		return
+	if who.isSuperadmin() {
+		// Guard: block deletion while any user still belongs to this org.
+		members, err := s.pb.List(r.Context(), colUsers,
+			pb.ListOptions{Filter: "organization = " + pbQuote(id), PerPage: 1})
+		if err != nil {
+			writeUpstreamError(w, err)
+			return
+		}
+		if members.TotalItems > 0 {
+			writeError(w, http.StatusConflict, "organization still has members; reassign or remove them first")
+			return
+		}
+	} else {
+		// An admin is scoped to their own organization.
+		if who.OrgID == "" || id != who.OrgID {
+			writeError(w, http.StatusForbidden, "you can only delete your own organization")
+			return
+		}
+		// Refuse if anyone other than the admin still belongs to it.
+		others, err := s.pb.List(r.Context(), colUsers, pb.ListOptions{
+			Filter:  "organization = " + pbQuote(id) + " && id != " + pbQuote(who.ID),
+			PerPage: 1,
+		})
+		if err != nil {
+			writeUpstreamError(w, err)
+			return
+		}
+		if others.TotalItems > 0 {
+			writeError(w, http.StatusConflict, "organization still has other members; reassign or remove them first")
+			return
+		}
+		// Detach and demote the admin so the org is empty before it is removed.
+		if _, err := s.pb.Update(r.Context(), colUsers, who.ID, map[string]any{
+			"organization": "",
+			"role":         roleUser,
+		}); err != nil {
+			writePBRelay(w, err)
+			return
+		}
 	}
 
 	if err := s.pb.Delete(r.Context(), colOrgs, id); err != nil {

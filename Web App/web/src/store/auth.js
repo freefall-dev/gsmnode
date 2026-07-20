@@ -33,6 +33,25 @@ export const auth = {
     return state.user;
   },
 
+  // Re-fetch the caller's identity from the API Server and replace the cached
+  // user. Used after a self-affecting change (e.g. creating or deleting an
+  // organization flips the caller's role/org) so gating updates live. Fields are
+  // set explicitly because the server omits an empty organization, and a naive
+  // merge would keep a stale one.
+  async refresh() {
+    const me = await api.get("/auth/me");
+    state.user = {
+      id: me.id,
+      email: me.email,
+      name: me.name || "",
+      role: me.role,
+      organization: me.organization || "",
+      verified: !!me.verified,
+    };
+    localStorage.setItem(USER_KEY, JSON.stringify(state.user));
+    return state.user;
+  },
+
   logout() {
     state.token = "";
     state.user = null;

@@ -104,12 +104,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/users/{id}", s.requireManager(s.handleDeleteUser))
 
 	// Organizations — the tenants users belong to. Listing is manager-scoped (an
-	// admin sees only their own org); create/rename/delete are superadmin-only
-	// (a superadmin spans every organization).
+	// admin sees only their own org). Any org-less user may create an org and
+	// becomes its admin; an admin may rename or delete their own org; a superadmin
+	// spans every organization.
 	mux.HandleFunc("GET /api/orgs", s.requireManager(s.handleListOrgs))
-	mux.HandleFunc("POST /api/orgs", s.requireSuperadmin(s.handleCreateOrg))
-	mux.HandleFunc("PATCH /api/orgs/{id}", s.requireSuperadmin(s.handleUpdateOrg))
-	mux.HandleFunc("DELETE /api/orgs/{id}", s.requireSuperadmin(s.handleDeleteOrg))
+	mux.HandleFunc("POST /api/orgs", s.requireUser(s.handleCreateOrg))
+	mux.HandleFunc("PATCH /api/orgs/{id}", s.requireManager(s.handleUpdateOrg))
+	mux.HandleFunc("DELETE /api/orgs/{id}", s.requireManager(s.handleDeleteOrg))
 
 	// PocketBase connection settings — superadmin only. These do NOT require the
 	// service account to already be configured (they exist to configure it).
