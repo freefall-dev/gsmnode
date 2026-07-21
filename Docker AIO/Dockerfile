@@ -16,7 +16,12 @@
 #     -e GSMNODE_SUPERADMIN_EMAIL=owner@example.com \
 #     -e GSMNODE_SUPERADMIN_PASSWORD=change-me \
 #     -v gsmnode_pb:/pb/pb_data \
+#     -v gsmnode_data:/data \
 #     gsmnode-aio
+#
+# Two volumes: gsmnode_pb is the database, gsmnode_data is the API Server's
+# plugin config and the settings the panel persists. Skip the second and plugin
+# setup is gone the next time the container is recreated.
 #
 # On first boot the API Server reconciles the PocketBase schema and creates the
 # app super-admin from GSMNODE_SUPERADMIN_*. Both steps are idempotent.
@@ -103,6 +108,15 @@ server {
         try_files $uri =404;
     }
 
+    # Liveness probe, matching the Web App BFF's own /healthz byte for byte —
+    # the API Server polls it for the Web App health on its panel overview.
+    # Without an exact-match location the SPA fallback below would answer it
+    # with index.html and a 200, i.e. "healthy" whatever the state of nginx.
+    location = /healthz {
+        default_type application/json;
+        return 200 '{"status":"ok","service":"gsmnode-web"}';
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -130,8 +144,11 @@ stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 
-; API Server: wait for PocketBase to be healthy, then start.
+; API Server: wait for PocketBase to be healthy, then start. It runs from /data
+; because it writes plugins.json and the panel's persisted .env relative to its
+; working directory, and /data is the volume that outlives the container.
 [program:api-server]
+directory=/data
 command=/bin/sh -c 'until wget -qO- http://127.0.0.1:8070/api/health >/dev/null 2>&1; do echo "waiting for pocketbase..."; sleep 1; done; exec /usr/local/bin/api-server'
 priority=20
 autostart=true
@@ -158,14 +175,20 @@ ENV API_ADDR=:8080 \
     JWT_ACCESS_TTL=24h \
     MESSAGE_TTL=5m \
     CORS_ALLOW_ORIGINS=http://localhost:8090 \
-    PB_BOOTSTRAP=true
+    PB_BOOTSTRAP=true \
+    PLUGINS_FILE=/data/plugins.json \
+    WEBAPP_URL=http://127.0.0.1:80
 
 # Required at runtime (no safe defaults): PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD, and
 # JWT_SECRET (a long random string). Pass them with `docker run -e ...`.
 # Optional: GSMNODE_SUPERADMIN_EMAIL / GSMNODE_SUPERADMIN_PASSWORD create the
 # first app super-admin on boot; PB_BOOTSTRAP=false skips schema setup.
 
+# pb_data is the database; /data is the API Server's plugin config and the
+# settings the panel persists. Both must be mounted to survive a recreate.
+RUN mkdir -p /data
 VOLUME /pb/pb_data
+VOLUME /data
 # 80 = Web App, 8070 = PocketBase admin, 8080 = API Server + embedded API panel.
 EXPOSE 80 8070 8080
 

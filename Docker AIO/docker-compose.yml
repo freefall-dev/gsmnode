@@ -42,6 +42,10 @@ services:
       - "${API_PORT:-8080}:8080"  # API Server + embedded API web panel (root /)
     volumes:
       - pb_data:/pb/pb_data
+      # Plugin config (plugins.json) and settings persisted from the panel —
+      # without this they are recreated empty with the container.
+      - api_data:/data
 
 volumes:
   pb_data:
+  api_data:

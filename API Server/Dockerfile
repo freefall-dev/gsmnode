@@ -28,13 +28,23 @@ RUN apk add --no-cache ca-certificates tzdata
 # Run as an unprivileged user.
 RUN addgroup -S app && adduser -S -G app app
 
-WORKDIR /app
-COPY --from=build /out/api-server /app/api-server
+COPY --from=build /out/api-server /usr/local/bin/api-server
+
+# The server writes two things at runtime, both relative to its working
+# directory: plugins.json (plugin enable-state + config) and .env, which the
+# panel's Settings screen persists edits to. /data is its working directory so
+# both land in one place that the app user can write and a volume can outlive
+# the container — without it, plugin config is lost on every recreate and
+# setting changes are lost on every restart.
+RUN mkdir -p /data && chown app:app /data
+WORKDIR /data
+VOLUME /data
 
 # Config comes entirely from environment variables (see .env.example).
 # PB_ADMIN_EMAIL and PB_ADMIN_PASSWORD are required for PocketBase access.
-ENV API_ADDR=:8080
+ENV API_ADDR=:8080 \
+    PLUGINS_FILE=/data/plugins.json
 EXPOSE 8080
 
 USER app
-ENTRYPOINT ["/app/api-server"]
+ENTRYPOINT ["/usr/local/bin/api-server"]

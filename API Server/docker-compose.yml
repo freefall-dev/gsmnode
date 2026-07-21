@@ -6,6 +6,13 @@ services:
     image: gsmnode-api
     container_name: gsmnode-api
     restart: unless-stopped
+    extra_hosts:
+      # Makes host.docker.internal resolve on Linux too (already works on Desktop).
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Plugin config (plugins.json) and settings persisted from the panel —
+      # without this they are recreated empty with the container.
+      - api_data:/data
     ports:
       - "${API_PORT:-8080}:8080"
     environment:
@@ -24,6 +31,10 @@ services:
       MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
       # Browser origins allowed by CORS (native apps are exempt).
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:5173}"
+      # The panel's overview probes WEBAPP_URL/healthz for the Web App's health.
+      # This compose file runs the API Server alone, so the Web App is wherever
+      # you started it — on the host by default, reached via host.docker.internal.
+      WEBAPP_URL: "${WEBAPP_URL:-http://host.docker.internal:8090}"
       # Schema + super-admin bootstrap on boot (idempotent). Set PB_BOOTSTRAP=false
       # to skip it once the database is established. The super-admin is the first
       # app login (role "superadmin"), created only when both email and password
@@ -32,3 +43,6 @@ services:
       GSMNODE_SUPERADMIN_EMAIL: "${GSMNODE_SUPERADMIN_EMAIL:-}"
       GSMNODE_SUPERADMIN_PASSWORD: "${GSMNODE_SUPERADMIN_PASSWORD:-}"
       GSMNODE_SUPERADMIN_NAME: "${GSMNODE_SUPERADMIN_NAME:-Administrator}"
+
+volumes:
+  api_data:

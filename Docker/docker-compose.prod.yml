@@ -57,6 +57,10 @@ services:
       JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
       MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:8090}"
+      # The panel's overview probes WEBAPP_URL/healthz for the Web App's health.
+      # It must be the address on the internal network: the default is
+      # localhost:8090, which from inside this container is this container.
+      WEBAPP_URL: "http://web-app:8090"
       # Schema + super-admin bootstrap on boot (idempotent). Set PB_BOOTSTRAP=false
       # to skip it once the database is established. The super-admin is the first
       # app login (role "superadmin"), created only when both email and password
@@ -65,6 +69,11 @@ services:
       GSMNODE_SUPERADMIN_EMAIL: "${GSMNODE_SUPERADMIN_EMAIL:-}"
       GSMNODE_SUPERADMIN_PASSWORD: "${GSMNODE_SUPERADMIN_PASSWORD:-}"
       GSMNODE_SUPERADMIN_NAME: "${GSMNODE_SUPERADMIN_NAME:-Administrator}"
+    volumes:
+      # Plugin config (plugins.json) and settings persisted from the panel. It
+      # holds plugin credentials, so treat it like the database. Named volume by
+      # default; set API_DATA to a host path in .env for a bind mount.
+      - "${API_DATA:-api_data}:/data"
     ports:
       # Localhost-only by default (the Web App reaches it over the internal
       # network). Set API_BIND=0.0.0.0 to expose the API panel on the network.
@@ -85,3 +94,4 @@ services:
 
 volumes:
   pb_data:
+  api_data:

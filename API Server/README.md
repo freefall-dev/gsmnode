@@ -47,12 +47,27 @@ Copy-Item .env.example .env
 | `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD` | PocketBase superuser login | — (required) |
 | `JWT_SECRET` | Signs client JWTs | dev placeholder |
 | `JWT_ACCESS_TTL` | Access-token lifetime | `24h` |
+| `MESSAGE_TTL` | How long a message may stay unprocessed before the sweeper fails it | `5m` |
 | `CORS_ALLOW_ORIGINS` | Comma list, or `*` | `*` |
+| `WEBAPP_URL` | Probed at `/healthz` for the Web App health on the panel | `http://localhost:8090` |
+| `PLUGINS_FILE` | Local JSON store for plugin enable-state + config | `plugins.json` |
+| `PB_BOOTSTRAP` | Reconcile the schema + super-admin on boot | `true` |
+| `GSMNODE_SUPERADMIN_EMAIL` / `_PASSWORD` / `_NAME` | First app login (role `superadmin`), created on boot when both email and password are set — distinct from the PocketBase superuser | — |
+
+`WEBAPP_URL` and `CORS_ALLOW_ORIGINS` are also editable from the panel's
+**Settings**, which merges the change back into `.env` so it survives a restart.
+That file and `PLUGINS_FILE` are resolved relative to the working directory, so
+the server needs one it can write.
 
 ## 2. Set up PocketBase collections
 
-Creates/updates `devices`, `messages`, `inbox`, `webhooks` (the default `users`
-auth collection is reused). Idempotent.
+Creates/updates `organizations`, `devices`, `messages`, `inbox`, `calls` and
+`webhooks` (the default `users` auth collection is reused, with `role`,
+`organization` and `pluginSettings` added). Idempotent.
+
+The server does the same reconcile itself on boot unless `PB_BOOTSTRAP=false`,
+so this script is for setting the schema up without starting the server —
+running both is harmless.
 
 ```powershell
 $env:POCKETBASE_URL="http://10.2.1.10:8028"
@@ -75,6 +90,19 @@ node scripts/create-user.mjs user@example.com "user-password" "Display Name"
 ```
 
 Health check: `GET http://localhost:8080/api/health`.
+
+### In Docker
+
+[`docker-compose.yml`](docker-compose.yml) here runs this server alone against an
+external PocketBase, reaching a Web App on the host through
+`host.docker.internal`. For the full stack — PocketBase and the Web App
+alongside it — use [`../Docker/`](../Docker/) or the single-container
+[`../Docker AIO/`](../Docker%20AIO/) instead.
+
+The image runs unprivileged from `/data`, and that is where `plugins.json` and
+the `.env` the panel writes back to end up, so `/data` is a volume in every
+compose file here. Mount it: dropping it loses plugin configuration each time
+the container is recreated.
 
 ## API
 
@@ -221,6 +249,10 @@ cmd/server/main.go          entry point, wiring, graceful shutdown
 internal/config             env/.env configuration
 internal/pb                 PocketBase REST client (superuser)
 internal/auth               JWT issue/verify, device token generation
+internal/bootstrap          schema + super-admin reconcile on boot
 internal/api                router, middleware, handlers
+  dist/                     built panel (generated; embedded at compile time)
+internal/plugins            plugin contract, manager, built-ins
+panel/                      Vue 3 + Tailwind source for the panel at /
 scripts/                    PocketBase setup + run helpers
 ```

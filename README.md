@@ -86,6 +86,44 @@ ownership in application logic.
    (`flutter pub get`, `flutter run`, then point it at the API Server on the
    sign-in screen).
 
+## Deploy with Docker
+
+The run order above builds from source against the existing PocketBase. To bring
+the whole server side up in containers instead, pick one of two shapes — both
+carry a dev compose file that builds from this working tree, and a
+`docker-compose.prod.yml` that pulls prebuilt images from the registry:
+
+| | Layout | Use when |
+|---|---|---|
+| [`Docker/`](Docker/) | Three containers — PocketBase, API Server, Web App | You want to scale, replace or upgrade the pieces independently |
+| [`Docker AIO/`](Docker%20AIO/) | One container, all three under supervisord (nginx serves the SPA) | One host, one thing to run |
+
+```powershell
+cd Docker                      # or "Docker AIO"
+Copy-Item .env.example .env    # .env.prod.example for the prebuilt-image files
+# edit .env: PB_ADMIN_*, GSMNODE_SUPERADMIN_* and JWT_SECRET at minimum
+docker compose up -d --build
+```
+
+Then the Web App is on `:8090`, the API Server and its panel on `:8080`, and
+PocketBase's admin UI on `:8070/_/`. Nothing needs seeding by hand: PocketBase
+upserts its superuser from `PB_ADMIN_*`, and the API Server then reconciles the
+schema and creates the app super-admin from `GSMNODE_SUPERADMIN_*`. Every step is
+idempotent, so restarts and upgrades are safe.
+
+`Docker/docker-compose.prod.yml` binds the API panel and the PocketBase admin UI
+to localhost, leaving only the Web App on the network (`PB_BIND` / `API_BIND`
+open them up). The all-in-one publishes all three on every interface — put it
+behind a reverse proxy, or don't expose `:8070` and `:8080` on an untrusted one.
+
+Two volumes hold everything worth keeping, and both want backing up: `pb_data`
+is the database, and `api_data` is the API Server's plugin state — `plugins.json`
+plus the settings the panel persists. Plugin config holds credentials such as
+IMAP/SMTP logins, so treat it as sensitively as the database.
+
+The phone surfaces are not containerized — they are Android apps, installed on
+the phone (see their READMEs).
+
 ## Message lifecycle
 
 `Pending` → (device pulls) `Processed` → `Sent` → `Delivered` · or `Failed`.

@@ -85,8 +85,8 @@ session. The session itself is unaffected — the JWT is persisted either way, a
 that is precisely the point: without a lock, anyone holding an unlocked phone has
 the gateway.
 
-This is [the Phone Agent's App lock](../Phone%20Agent/README.md), carried over
-rather than reinvented — same `AppLockController` / `BiometricService` /
+This is [the Phone Agent's App lock](../Phone%20Agent/README.md#app-lock-face--fingerprint),
+carried over rather than reinvented — same `AppLockController` / `BiometricService` /
 `AppLockGate` split, same `app_lock` preference key, same lifecycle rules, same
 `local_auth` major. The two surfaces differ only where a console differs from a
 gateway: the Agent arms on a *registered device* and keeps routing SMS behind its

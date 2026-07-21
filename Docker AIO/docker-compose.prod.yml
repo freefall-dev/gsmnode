@@ -43,6 +43,11 @@ services:
     volumes:
       # Named volume by default; set PB_DATA to a host path in .env for a bind mount.
       - "${PB_DATA:-pb_data}:/pb/pb_data"
+      # Plugin config (plugins.json) and settings persisted from the panel. It
+      # holds plugin credentials, so treat it like the database. Set API_DATA to
+      # a host path in .env for a bind mount.
+      - "${API_DATA:-api_data}:/data"
 
 volumes:
   pb_data:
+  api_data:

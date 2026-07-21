@@ -13,9 +13,11 @@ API Server  ──(pending messages)──►  Phone Agent  ──►  SmsManage
 > The Phone Agent talks **only** to the API Server (never to PocketBase directly),
 > using the device token issued at registration.
 
-> **Not to be confused with the `Phone App/` folder** — that is a separate,
-> not-yet-started surface that will mirror the Web App. This one *controls the
-> phone* (SMS/MMS + calls).
+> **Not to be confused with [`../Phone App/`](../Phone%20App/)** — that is a
+> separate surface, a mobile mirror of the Web App, which *controls the gateway*.
+> This one *controls the phone* (SMS/MMS + calls). They install separately
+> (`app.gsmnode.phoneagent` and `app.gsmnode.phoneapp`) and can sit side by side
+> on one device.
 
 ## Prerequisites
 
@@ -120,11 +122,23 @@ lib/
     api_client.dart         API Server HTTP client
     sms_service.dart        platform-channel bridge (send + incoming stream)
     gateway_service.dart    the poll → send → report loop + inbox forwarding
+    crypto_service.dart     AES-256-GCM + PBKDF2 (matches the Web App)
+    biometric_service.dart  face/fingerprint prompts
+    app_lock.dart           the App lock preference, armed by a prompt
+  widgets/
+    app_lock_gate.dart      the lock overlay + its lifecycle rules
   screens/
     login_screen.dart       login + device registration
-    home_screen.dart        start/stop, permissions, activity log
+    home_screen.dart        start/stop, permissions, App lock, activity log
 android_overlay/            native Android files to copy after `flutter create`
 ```
+
+The Dart and Kotlin halves meet on channels named after the application id:
+`app.gsmnode.phoneagent/sms` (send), `/sms_incoming`, `/sms_status`,
+`/call_incoming`, and the `app.gsmnode.phoneagent.SMS_STATUS` broadcast action.
+They agree by **string equality alone** — nothing checks them at compile time, so
+a rename that misses one side builds, installs and starts cleanly, then fails on
+the first SMS. Change both, or neither.
 
 ## Background & delivery reports (implemented)
 
@@ -134,6 +148,32 @@ android_overlay/            native Android files to copy after `flutter create`
 - **Delivery reports**: `MainActivity.sendSms` attaches `sent`/`delivered`
   PendingIntents; `SmsStatusReceiver` forwards the outcome (tagged with the
   message id) to Dart, which reports `Delivered`/`Failed` to the API Server.
+
+## App lock (face / fingerprint)
+
+The home screen's **App lock** toggle puts the phone's biometrics in front of the
+running gateway. A phone left unlocked on a desk is otherwise a phone anyone can
+stop, un-register, or read the activity log of.
+
+- It arms only once the device is **registered** — there is nothing worth guarding
+  on the login screen, and locking it would strand someone who signed out.
+- It closes on a cold start and whenever the app has been in the background for
+  30s, and **always on a close**, a detach being a deliberate exit where the grace
+  period is only there to absorb an interruption.
+- The prompt gates the toggle in **both directions**: turning it on proves the
+  lock can be cleared before arming it, and turning it off stops someone holding
+  an already-unlocked phone from quietly disarming it.
+- It is Android's `BiometricPrompt`, not `biometricOnly`, so the **screen lock
+  (PIN, pattern, password) is its own fallback** — a wet finger is not a lockout.
+  A phone that can no longer prompt *at all* (biometrics gone and the screen lock
+  removed) disarms the lock rather than becoming a one-way door.
+- **The gateway keeps running behind it.** The lock covers the UI; it does not
+  stop the foreground service, so SMS keeps flowing while the phone is locked.
+  That is the whole point of locking a gateway rather than signing it out.
+
+The [Phone App carries the same lock](../Phone%20App/README.md) — same
+`AppLockController` / `BiometricService` / `AppLockGate` split, same `app_lock`
+preference key — differing only where a console differs from a gateway.
 
 ## Data SMS, MMS, calls & encryption
 
