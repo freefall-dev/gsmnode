@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The safe-zone padding is baked into assets/icon/adaptive-foreground.png, so
+     no <inset> is needed here — the mark keeps its size through a
+     `dart run flutter_launcher_icons` regeneration. The generator writes an
+     <inset android:inset="16%">, which insets *every* edge and so renders the
+     mark at 68%, leaving this icon visibly smaller than the Phone Agent's. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+  <background android:drawable="@color/ic_launcher_background"/>
+  <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>

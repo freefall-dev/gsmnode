@@ -58,7 +58,7 @@ class GsmNodeConsoleApp extends StatelessWidget {
     return AnimatedBuilder(
       animation: Listenable.merge([themeController, auth]),
       builder: (context, _) => MaterialApp(
-        title: 'gsmnode',
+        title: 'gsmnode app',
         debugShowCheckedModeBanner: false,
         theme: gsmnodeLightTheme(),
         darkTheme: gsmnodeDarkTheme(),
