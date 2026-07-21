@@ -5,6 +5,7 @@ import { theme, toggleTheme } from "./theme";
 import { me, token, restore, logout, isManager, isSuperadmin } from "./api";
 import LoginView from "./components/LoginView.vue";
 import StatusCard from "./components/StatusCard.vue";
+import ConnectedDevicesCard from "./components/ConnectedDevicesCard.vue";
 import DevicesCard from "./components/DevicesCard.vue";
 import UsersCard from "./components/UsersCard.vue";
 import OrgsCard from "./components/OrgsCard.vue";
@@ -25,7 +26,12 @@ onMounted(async () => {
 // Web App settings need a superadmin. The server enforces the same rules — this
 // only hides what the caller could not use anyway.
 const sections = computed(() => {
-  const out = [{ id: "overview", label: "Overview" }];
+  // Devices is open to every role: a plain user manages the phones they
+  // registered, a manager the ones their role reaches. The server scopes it.
+  const out = [
+    { id: "overview", label: "Overview" },
+    { id: "devices", label: "Devices" },
+  ];
   if (isManager.value) {
     out.push({ id: "users", label: "Users" }, { id: "orgs", label: "Organizations" });
   }
@@ -70,7 +76,8 @@ const authApi = [
 const clientApi = [
   { method: "GET", path: "/api/devices", desc: "List registered gateway devices" },
   { method: "GET", path: "/api/devices?scope=all", desc: "Widen to every device your role may see" },
-  { method: "DELETE", path: "/api/devices/{id}", desc: "Remove a device" },
+  { method: "PATCH", path: "/api/devices/{id}", desc: "Rename a device your role may manage" },
+  { method: "DELETE", path: "/api/devices/{id}", desc: "Remove a device your role may manage" },
   { method: "POST", path: "/api/messages", desc: "Queue an outbound SMS" },
   { method: "GET", path: "/api/messages", desc: "Outbound message history" },
   { method: "GET", path: "/api/messages/{id}", desc: "One message, with its current status" },
@@ -180,8 +187,9 @@ const mobileApi = [
 
       <template v-if="section === 'overview'">
         <StatusCard />
-        <DevicesCard />
+        <ConnectedDevicesCard />
       </template>
+      <DevicesCard v-else-if="section === 'devices'" />
       <UsersCard v-else-if="section === 'users'" />
       <OrgsCard v-else-if="section === 'orgs'" />
       <PocketBaseCard v-else-if="section === 'pocketbase'" />

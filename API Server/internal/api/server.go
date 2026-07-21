@@ -167,6 +167,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/integrations/{name}/health", s.requireUser(s.handleIntegrationHealth))
 
 	mux.HandleFunc("GET /api/devices", s.requireUser(s.handleListDevices))
+	mux.HandleFunc("PATCH /api/devices/{id}", s.requireUser(s.handleUpdateDevice))
 	mux.HandleFunc("DELETE /api/devices/{id}", s.requireUser(s.handleDeleteDevice))
 
 	mux.HandleFunc("GET /api/messages", s.requireUser(s.handleListMessages))

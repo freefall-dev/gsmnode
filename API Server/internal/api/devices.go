@@ -181,25 +181,87 @@ func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": out, "total": res.TotalItems})
 }
 
-// handleDeleteDevice removes a device owned by the user.
-func (s *Server) handleDeleteDevice(w http.ResponseWriter, r *http.Request) {
-	uid, _ := userFromCtx(r.Context())
-	id := r.PathValue("id")
+// canManageDevice reports whether the caller may rename or remove this device.
+// The same ladder the widened listing uses: your own devices always, every
+// device for a superadmin, an admin's own organization's devices for an admin.
+// Anything else is somebody else's phone.
+func (s *Server) canManageDevice(ctx context.Context, who *callerIdentity, rec pb.Record) (bool, error) {
+	owner := asString(rec["owner"])
+	if owner == who.ID || who.isSuperadmin() {
+		return true, nil
+	}
+	if !who.isManager() || who.OrgID == "" {
+		return false, nil
+	}
+	u, err := s.pb.GetOne(ctx, colUsers, owner)
+	if err != nil {
+		if pb.NotFound(err) {
+			return false, nil // orphaned device: only a superadmin cleans those up
+		}
+		return false, err
+	}
+	return asString(u["organization"]) == who.OrgID, nil
+}
 
-	rec, err := s.pb.GetOne(r.Context(), colDevices, id)
+// loadManageableDevice fetches the device at {id} and enforces the scope rules,
+// writing the response itself when the caller may not touch it.
+func (s *Server) loadManageableDevice(w http.ResponseWriter, r *http.Request) (pb.Record, bool) {
+	who := caller(r)
+	rec, err := s.pb.GetOne(r.Context(), colDevices, r.PathValue("id"))
 	if err != nil {
 		writeUpstreamError(w, err)
-		return
+		return nil, false
 	}
-	if asString(rec["owner"]) != uid {
+	ok, err := s.canManageDevice(r.Context(), who, rec)
+	if err != nil {
+		writeUpstreamError(w, err)
+		return nil, false
+	}
+	if !ok {
 		writeError(w, http.StatusForbidden, "not your device")
+		return nil, false
+	}
+	return rec, true
+}
+
+// handleDeleteDevice removes a device the caller may manage.
+func (s *Server) handleDeleteDevice(w http.ResponseWriter, r *http.Request) {
+	rec, ok := s.loadManageableDevice(w, r)
+	if !ok {
 		return
 	}
-	if err := s.pb.Delete(r.Context(), colDevices, id); err != nil {
+	if err := s.pb.Delete(r.Context(), colDevices, asString(rec["id"])); err != nil {
 		writeUpstreamError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleUpdateDevice renames a device. Only the display name is editable:
+// device_id, the token and the heartbeat fields are the phone's to report.
+func (s *Server) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
+	rec, ok := s.loadManageableDevice(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	updated, err := s.pb.Update(r.Context(), colDevices, asString(rec["id"]), pb.Record{"name": name})
+	if err != nil {
+		writeUpstreamError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, recordToDevice(updated))
 }
 
 type registerDeviceRequest struct {
