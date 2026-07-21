@@ -7,9 +7,9 @@ Brand + design system live in
 [`Design/SMS Gateway logo design/`](Design/SMS%20Gateway%20logo%20design/) —
 signal-green `#2E9E6B` on ink, Space Grotesk (display) · IBM Plex Sans (body) ·
 JetBrains Mono (code/labels), the lowercase `gsm`+`node` wordmark, and the
-two-arrow routing mark. All three UI surfaces implement it (the Web App and API
-panel share a persisted light/dark toggle, `localStorage` key `gsmnode-theme`,
-`data-gsm-theme` attribute; the Phone Agent follows the system theme).
+two-arrow routing mark. Every UI surface implements it (the Web App, API panel
+and Phone App share a persisted light/dark/system preference under the key
+`gsmnode-theme`; the Phone Agent follows the system theme).
 
 The application surfaces sit in front of a shared PocketBase. **The API Server
 is the only component that talks to PocketBase**; every other surface talks only
@@ -18,9 +18,12 @@ to the API Server.
 ```
 ┌────────────┐        ┌──────────────────┐        ┌──────────────┐
 │  Web App   │───────►│                  │───────►│              │
-│ (Vue/Go)   │        │   API Server     │        │  PocketBase  │
-├────────────┤        │     (Go)         │        │ 10.2.1.10:   │
-│Phone Agent │───────►│                  │───────►│    8028      │
+│ (Vue/Go)   │        │                  │        │              │
+├────────────┤        │   API Server     │        │  PocketBase  │
+│ Phone App  │───────►│     (Go)         │        │ 10.2.1.10:   │
+│ (Flutter)  │        │                  │        │    8028      │
+├────────────┤        │                  │        │              │
+│Phone Agent │───────►│                  │───────►│              │
 │ (Flutter)  │        └──────────────────┘        └──────────────┘
 └────────────┘
 ```
@@ -29,8 +32,11 @@ Two distinct phone-side surfaces, deliberately kept separate:
 
 - **Phone Agent** — *controls the phone*: sends/receives SMS & MMS and
   makes/receives calls on behalf of the gateway.
-- **Phone App** — *not started yet*: will be a mobile mirror of the Web App,
-  with the same functionality.
+- **Phone App** — *controls the gateway*: a mobile mirror of the Web App, with
+  the same screens and the same functionality.
+
+They install separately (`app.gsmnode.phone` and `app.gsmnode.console`) and can
+sit side by side on one device.
 
 ## Surfaces
 
@@ -39,7 +45,7 @@ Two distinct phone-side surfaces, deliberately kept separate:
 | [`API Server/`](API%20Server/) | Go | `:8080` | ✅ Built & verified (live E2E) |
 | [`Web App/`](Web%20App/) | Go BFF + Vue 3 + Tailwind | `:8090` | ✅ Built & verified |
 | [`Phone Agent/`](Phone%20Agent/) | Flutter (Android) | — | ✅ Built & run on a real device; foreground service + delivery reports |
-| [`Phone App/`](Phone%20App/) | Flutter (planned) | — | ⏳ Empty placeholder — mobile mirror of the Web App |
+| [`Phone App/`](Phone%20App/) | Flutter (Android) | — | ✅ Built — mobile mirror of the Web App; not yet run against a live server |
 | [`Home Assistant Plugin/`](Home%20Assistant%20Plugin/) | HA custom component (Python) | — | ✅ `notify.gsmnode` service; flow validated |
 
 ## PocketBase collections
@@ -75,6 +81,9 @@ ownership in application logic.
    Open http://localhost:8090 and sign in.
 4. **Phone Agent** — see [`Phone Agent/README.md`](Phone%20Agent/README.md) (install
    Flutter + JDK 17, `flutter create`, copy `android_overlay/`, `flutter run`).
+5. **Phone App** (optional) — see [`Phone App/README.md`](Phone%20App/README.md)
+   (`flutter pub get`, `flutter run`, then point it at the API Server on the
+   sign-in screen).
 
 ## Message lifecycle
 
@@ -120,4 +129,5 @@ See [`API Server/README.md`](API%20Server/README.md) for the wire format.
 
 - [API Server README](API%20Server/README.md) — full endpoint reference, setup
 - [Web App README](Web%20App/README.md) — dev/build, pages
+- [Phone App README](Phone%20App/README.md) — Flutter build, screens, API mapping
 - [Phone Agent README](Phone%20Agent/README.md) — Flutter build + native SMS wiring

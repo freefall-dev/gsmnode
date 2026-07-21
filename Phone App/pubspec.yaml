@@ -1,0 +1,30 @@
+name: console
+description: "gsmnode console — mobile mirror of the Web App."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  shared_preferences: ^2.3.2
+  google_fonts: ^8.1.0
+  # AES-256-GCM + PBKDF2 for end-to-end encryption (matches the Web App scheme).
+  cryptography: ^2.7.0
+  # Picking MMS attachments off the phone, standing in for the Web App's file
+  # input. Media-only rather than any-file: that is what a carrier will actually
+  # carry, and the generic pickers currently on pub can't build against AGP 9.
+  image_picker: ^1.1.2
+  # Locale-aware timestamps, standing in for the Web App's toLocaleString().
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
