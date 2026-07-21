@@ -1,4 +1,4 @@
-package app.gsmnode.console
+package app.gsmnode.phoneapp
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

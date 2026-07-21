@@ -1,4 +1,4 @@
-package app.gsmnode.phone
+package app.gsmnode.phoneagent
 
 import android.app.Application
 import io.flutter.embedding.engine.FlutterEngine

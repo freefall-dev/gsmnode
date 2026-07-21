@@ -38,14 +38,15 @@ missing, regenerate the platform files in place — it leaves `lib/` and
 `pubspec.yaml` alone:
 
 ```powershell
-flutter create . --org app.gsmnode --project-name console --platforms=android
+flutter create . --org app.gsmnode --project-name phoneapp --platforms=android
 ```
 
-> The application id is **`app.gsmnode.console`**, deliberately distinct from the
-> Phone Agent's `app.gsmnode.phone` so both can be installed at once. It is
-> derived from `--org` + `--project-name` at create time, so the Dart package
-> name in `pubspec.yaml` is kept as `console` to match — renaming either one
-> changes the installed app's identity.
+> The application id is **`app.gsmnode.phoneapp`**, deliberately distinct from the
+> Phone Agent's `app.gsmnode.phoneagent` so both can be installed at once. It is
+> derived from `--org` + `--project-name` at create time. The Dart package name in
+> `pubspec.yaml` stays `console`, which is deliberately different — don't "fix" one
+> to match the other, and don't rename either: it changes the installed app's
+> identity (or, for the Dart name, every `package:console/…` import).
 
 On first launch, open **Server settings** on the sign-in screen and enter the API
 Server URL, then sign in with the user you created via

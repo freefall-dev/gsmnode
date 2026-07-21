@@ -36,7 +36,7 @@ Two distinct phone-side surfaces, deliberately kept separate:
   the same screens and the same functionality. It can optionally sit behind the
   phone's own face/fingerprint lock (**Settings → App lock**).
 
-They install separately (`app.gsmnode.phone` and `app.gsmnode.console`) and can
+They install separately (`app.gsmnode.phoneagent` and `app.gsmnode.phoneapp`) and can
 sit side by side on one device.
 
 ## Surfaces

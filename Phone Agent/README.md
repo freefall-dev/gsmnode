@@ -40,12 +40,12 @@ The Gradle **wrapper** is not committed (`gradlew`, `gradlew.bat`,
 platform files in place — it leaves `lib/` and `pubspec.yaml` alone:
 
 ```powershell
-flutter create . --org app.gsmnode --project-name phone --platforms=android
+flutter create . --org app.gsmnode --project-name phoneagent --platforms=android
 ```
 
-> The application id is **`app.gsmnode.phone`** (`namespace` + `applicationId` in
+> The application id is **`app.gsmnode.phoneagent`** (`namespace` + `applicationId` in
 > `android/app/build.gradle`, and the Kotlin package under
-> `android/app/src/main/kotlin/app/gsmnode/phone/`). The Dart package name is
+> `android/app/src/main/kotlin/app/gsmnode/phoneagent/`). The Dart package name is
 > `sms_gateway_phone`, which is deliberately different — don't "fix" one to match
 > the other, and don't rename either: it changes the installed app's identity.
 
@@ -58,7 +58,7 @@ Copy-Item -Recurse -Force android_overlay/* android/
 ```
 
 It carries `app/src/main/AndroidManifest.xml` (SMS/MMS/call permissions and the
-receivers) plus the Kotlin bridge in `app/src/main/kotlin/app/gsmnode/phone/`:
+receivers) plus the Kotlin bridge in `app/src/main/kotlin/app/gsmnode/phoneagent/`:
 `MainActivity.kt` (send), `SmsReceiver.kt` / `MmsReceiver.kt` / `CallReceiver.kt`
 (inbound), `SmsStatusReceiver.kt` (delivery reports), `MmsPduBuilder.kt` and
 `GatewayForegroundService.kt`.

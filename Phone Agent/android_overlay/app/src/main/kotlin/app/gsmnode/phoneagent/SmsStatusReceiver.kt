@@ -1,4 +1,4 @@
-package app.gsmnode.phone
+package app.gsmnode.phoneagent
 
 import android.app.Activity
 import android.content.BroadcastReceiver
