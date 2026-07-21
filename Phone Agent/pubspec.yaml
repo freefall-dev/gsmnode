@@ -17,6 +17,8 @@ dependencies:
   package_info_plus: ^8.0.0
   # AES-256-GCM + PBKDF2 for end-to-end encryption (matches the Web App scheme).
   cryptography: ^2.7.0
+  # Face / fingerprint (with device-PIN fallback) for the App lock.
+  local_auth: ^2.3.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0

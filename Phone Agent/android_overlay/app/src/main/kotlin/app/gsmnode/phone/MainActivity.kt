@@ -11,12 +11,14 @@ import android.telecom.TelecomManager
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+// FlutterFragmentActivity (not FlutterActivity): local_auth drives androidx
+// BiometricPrompt, which needs a FragmentActivity host to show its sheet.
+class MainActivity : FlutterFragmentActivity() {
 
     companion object {
         const val METHOD_CHANNEL = "app.gsmnode/sms"

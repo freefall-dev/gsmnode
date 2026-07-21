@@ -9,6 +9,7 @@ class Storage {
   static const _kDeviceName = 'device_name';
   static const _kUserEmail = 'user_email';
   static const _kEncPassphrase = 'enc_passphrase';
+  static const _kAppLock = 'app_lock';
 
   final SharedPreferences _prefs;
   Storage(this._prefs);
@@ -39,6 +40,11 @@ class Storage {
   /// the Web App (and any other device) that reads these messages.
   String get encPassphrase => _prefs.getString(_kEncPassphrase) ?? '';
   set encPassphrase(String v) => _set(_kEncPassphrase, v.isEmpty ? null : v);
+
+  /// Whether Face/Fingerprint is required to reach the UI. Opt-in: a phone with
+  /// nothing enrolled must not start out locked.
+  bool get appLockEnabled => _prefs.getBool(_kAppLock) ?? false;
+  set appLockEnabled(bool v) => _prefs.setBool(_kAppLock, v);
 
   bool get isRegistered => (deviceToken ?? '').isNotEmpty;
 

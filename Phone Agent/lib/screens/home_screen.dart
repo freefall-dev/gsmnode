@@ -20,12 +20,14 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     gateway.addListener(_onChange);
+    appLock.addListener(_onChange);
     _checkPermissions();
   }
 
   @override
   void dispose() {
     gateway.removeListener(_onChange);
+    appLock.removeListener(_onChange);
     super.dispose();
   }
 
@@ -52,6 +54,31 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Turns App lock on or off. The prompt runs first — arming a lock the phone
+  /// cannot clear would be a one-way door.
+  Future<void> _toggleAppLock() async {
+    final turningOn = !appLock.enabled;
+    if (turningOn && !await biometrics.supported) {
+      _say('This phone has no fingerprint, face unlock or screen lock set up.');
+      return;
+    }
+    final out = await appLock.setEnabled(turningOn);
+    if (!out.passed) {
+      _say(out.message ?? 'App lock unchanged.');
+      return;
+    }
+    _say(turningOn
+        ? 'App lock on — ${await biometrics.methodLabel()} required to open.'
+        : 'App lock off.');
+  }
+
+  void _say(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _logout() async {
     gateway.stop();
     await storage.clearSession();
@@ -76,6 +103,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            onPressed: _toggleAppLock,
+            icon: Icon(appLock.enabled ? Icons.lock : Icons.lock_open),
+            tooltip: appLock.enabled ? 'App lock is on' : 'App lock is off',
+          ),
           IconButton(
             onPressed: _logout,
             icon: const Icon(Icons.logout),
