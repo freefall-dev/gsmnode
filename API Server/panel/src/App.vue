@@ -53,11 +53,18 @@ const roleClass = computed(() =>
       : "bg-sunken text-muted",
 );
 
+const publicApi = [
+  { method: "GET", path: "/api/health", desc: "Liveness of this process" },
+  { method: "GET", path: "/api/status", desc: "This server, PocketBase and the Web App, each probed" },
+];
+
 const authApi = [
   { method: "POST", path: "/api/auth/login", desc: "Exchange email + password for a token" },
   { method: "POST", path: "/api/auth/refresh", desc: "Exchange a valid token for a fresh one" },
   { method: "GET", path: "/api/auth/validate", desc: "Check whether a token is still valid" },
   { method: "GET", path: "/api/auth/me", desc: "Identity of the bearer token (incl. role)" },
+  { method: "PATCH", path: "/api/auth/me", desc: "Edit your own display name" },
+  { method: "POST", path: "/api/auth/change-password", desc: "Change your own password (re-verifies the current one)" },
 ];
 
 const clientApi = [
@@ -66,10 +73,13 @@ const clientApi = [
   { method: "DELETE", path: "/api/devices/{id}", desc: "Remove a device" },
   { method: "POST", path: "/api/messages", desc: "Queue an outbound SMS" },
   { method: "GET", path: "/api/messages", desc: "Outbound message history" },
+  { method: "GET", path: "/api/messages/{id}", desc: "One message, with its current status" },
   { method: "POST", path: "/api/calls", desc: "Queue an outbound phone call" },
+  { method: "GET", path: "/api/calls", desc: "Call log, filterable by ?direction=incoming|outgoing" },
   { method: "GET", path: "/api/inbox", desc: "Messages received by your devices" },
   { method: "GET", path: "/api/webhooks", desc: "List webhook subscriptions" },
   { method: "POST", path: "/api/webhooks", desc: "Register a webhook" },
+  { method: "DELETE", path: "/api/webhooks/{id}", desc: "Remove a webhook subscription" },
 ];
 
 const managementApi = [
@@ -91,16 +101,20 @@ const superadminApi = [
   { method: "PATCH", path: "/api/orgs/{id}", desc: "Rename an organization" },
   { method: "DELETE", path: "/api/orgs/{id}", desc: "Delete an organization (must be empty)" },
   { method: "GET", path: "/api/admin/plugins", desc: "List plugins + state + last health" },
+  { method: "GET", path: "/api/admin/plugins/{name}", desc: "One plugin, with its global config" },
   { method: "POST", path: "/api/admin/plugins", desc: "Register an external (HTTP) plugin" },
   { method: "PUT", path: "/api/admin/plugins/{name}", desc: "Enable/disable + configure a plugin" },
   { method: "DELETE", path: "/api/admin/plugins/{name}", desc: "Remove an external plugin" },
   { method: "POST", path: "/api/admin/plugins/{name}/health", desc: "Run a plugin health check" },
 ];
 
+// {name} is any plugin declaring per-user settings (email-to-sms today), so
+// these routes grow with the plugins rather than with hand-written endpoints.
 const integrationsApi = [
-  { method: "GET", path: "/api/integrations/email-to-sms", desc: "Resolved email-to-SMS settings (cascade)" },
-  { method: "PUT", path: "/api/integrations/email-to-sms", desc: "Save your (or your org's) mailbox settings" },
-  { method: "POST", path: "/api/integrations/email-to-sms/health", desc: "Probe your resolved IMAP mailbox" },
+  { method: "GET", path: "/api/integrations", desc: "Every integration you can configure, each resolved" },
+  { method: "GET", path: "/api/integrations/{name}", desc: "One integration, resolved through the cascade" },
+  { method: "PUT", path: "/api/integrations/{name}", desc: "Save your (or your org's) settings layer" },
+  { method: "POST", path: "/api/integrations/{name}/health", desc: "Probe the resolved settings (e.g. an IMAP mailbox)" },
 ];
 
 const mobileApi = [
@@ -108,7 +122,8 @@ const mobileApi = [
   { method: "GET", path: "/api/mobile/v1/messages", desc: "Pull pending messages to send" },
   { method: "PATCH", path: "/api/mobile/v1/messages/{id}", desc: "Report sent / delivered / failed" },
   { method: "POST", path: "/api/mobile/v1/inbox", desc: "Push a received SMS" },
-  { method: "POST", path: "/api/mobile/v1/ping", desc: "Device heartbeat" },
+  { method: "POST", path: "/api/mobile/v1/calls", desc: "Report a placed / received / failed call" },
+  { method: "POST", path: "/api/mobile/v1/ping", desc: "Device heartbeat (also refreshes its SIM list)" },
 ];
 </script>
 
@@ -173,6 +188,7 @@ const mobileApi = [
       <PluginsCard v-else-if="section === 'plugins'" />
 
       <template v-else-if="section === 'api'">
+        <EndpointTable title="Public" auth="None" :endpoints="publicApi" />
         <EndpointTable title="Auth" auth="Public / Bearer" :endpoints="authApi" />
         <EndpointTable title="Client API" auth="Bearer token" :endpoints="clientApi" />
         <EndpointTable title="User management" auth="Manager" :endpoints="managementApi" />

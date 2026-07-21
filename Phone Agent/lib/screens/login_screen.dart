@@ -25,6 +25,12 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _busy = false;
   String? _error;
 
+  // Reveal toggles for the two obscured fields. Typing a password or a shared
+  // passphrase on a phone keyboard is error-prone, and a wrong passphrase fails
+  // silently later as unreadable messages rather than as a login error.
+  bool _showPassword = false;
+  bool _showPassphrase = false;
+
   @override
   void dispose() {
     _apiBase.dispose();
@@ -64,6 +70,21 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Eye toggle for an obscured field, styled to sit inside the input.
+  Widget _revealButton({
+    required bool shown,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(shown ? Icons.visibility_off : Icons.visibility),
+      iconSize: 20,
+      tooltip: shown ? 'Hide $label' : 'Show $label',
+      color: context.cg.textMuted,
+    );
   }
 
   @override
@@ -113,8 +134,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _password,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    suffixIcon: _revealButton(
+                      shown: _showPassword,
+                      label: 'password',
+                      onTap: () =>
+                          setState(() => _showPassword = !_showPassword),
+                    ),
+                  ),
+                  obscureText: !_showPassword,
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -124,11 +153,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _passphrase,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Encryption passphrase (optional)',
                     hintText: 'Match the Web App to read E2E messages',
+                    suffixIcon: _revealButton(
+                      shown: _showPassphrase,
+                      label: 'passphrase',
+                      onTap: () =>
+                          setState(() => _showPassphrase = !_showPassphrase),
+                    ),
                   ),
-                  obscureText: true,
+                  obscureText: !_showPassphrase,
                 ),
                 const SizedBox(height: 16),
                 if (_error != null)
