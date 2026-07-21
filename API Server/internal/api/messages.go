@@ -318,13 +318,16 @@ func (s *Server) handleGetMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePullMessages returns pending messages for the calling device and marks
-// them Processed so they are not handed out twice.
+// them Processed so they are not handed out twice. Messages scheduled for a
+// future time are withheld until they are due — the pull is the only gate on
+// schedule_at, since the device sends whatever it is handed.
 func (s *Server) handlePullMessages(w http.ResponseWriter, r *http.Request) {
 	device := deviceFromCtx(r.Context())
 	deviceID := asString(device["id"])
 
 	res, err := s.pb.List(r.Context(), colMessages, pb.ListOptions{
-		Filter:  "device = " + pbQuote(deviceID) + " && status = " + pbQuote(statusPending),
+		Filter: "device = " + pbQuote(deviceID) + " && status = " + pbQuote(statusPending) +
+			" && " + dueFilter(time.Now()),
 		Sort:    "created",
 		PerPage: clampPerPage(queryInt(r, "limit", 20)),
 	})
@@ -427,6 +430,39 @@ func cleanPhones(in []string) []string {
 		}
 	}
 	return out
+}
+
+// pbTime renders t the way PocketBase stores datetimes, so it can be compared
+// against a date field inside a filter expression.
+func pbTime(t time.Time) string {
+	return t.UTC().Format("2006-01-02 15:04:05.000Z")
+}
+
+// dueFilter is a filter fragment matching messages that are ready to send as of
+// now: either never scheduled, or scheduled for a moment that has passed. An
+// unset PocketBase date field compares equal to the empty string.
+func dueFilter(now time.Time) string {
+	return `(schedule_at = "" || schedule_at <= ` + pbQuote(pbTime(now)) + `)`
+}
+
+// scheduleTime returns rec's schedule_at as a time. The second result is false
+// when the field is unset or unparseable — treating a malformed date as "not
+// scheduled" keeps it on the normal path rather than stranding it forever.
+func scheduleTime(rec pb.Record) (time.Time, bool) {
+	raw := asString(rec["schedule_at"])
+	if raw == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{
+		"2006-01-02 15:04:05.999Z07:00",
+		"2006-01-02 15:04:05.999Z",
+		time.RFC3339,
+	} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }
 
 func clampPerPage(n int) int {

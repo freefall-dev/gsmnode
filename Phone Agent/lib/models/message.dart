@@ -35,6 +35,10 @@ class GatewayMessage {
   final List<Attachment> attachments;
   // When true, phoneNumbers + textMessage are E2E ciphertext.
   final bool encrypted;
+  /// When set, the message must not be sent before this moment. The server
+  /// withholds scheduled messages until they are due, so this is a backstop
+  /// against an older server handing one over early.
+  final DateTime? scheduleAt;
 
   GatewayMessage({
     required this.id,
@@ -48,11 +52,15 @@ class GatewayMessage {
     this.subject = '',
     this.attachments = const [],
     this.encrypted = false,
+    this.scheduleAt,
   });
 
   bool get isCall => type == 'call';
   bool get isData => type == 'data';
   bool get isMms => type == 'mms';
+
+  /// Whether the message is ready to send now.
+  bool get isDue => scheduleAt == null || !scheduleAt!.isAfter(DateTime.now());
 
   factory GatewayMessage.fromJson(Map<String, dynamic> json) {
     return GatewayMessage(
@@ -71,6 +79,15 @@ class GatewayMessage {
           .map((e) => Attachment.fromJson(e as Map<String, dynamic>))
           .toList(),
       encrypted: json['encrypted'] == true,
+      scheduleAt: _parseDate(json['schedule_at']),
     );
+  }
+
+  /// Parses a server datetime. PocketBase emits `2006-01-02 15:04:05.000Z`,
+  /// which `DateTime.parse` accepts once the space is replaced by `T`.
+  static DateTime? _parseDate(dynamic v) {
+    final s = v as String? ?? '';
+    if (s.isEmpty) return null;
+    return DateTime.tryParse(s.replaceFirst(' ', 'T'))?.toLocal();
   }
 }

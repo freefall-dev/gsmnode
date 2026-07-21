@@ -11,6 +11,16 @@ package bootstrap
 // jsonMaxSize matches the default json field cap in setup-pocketbase.mjs (2 MB).
 const jsonMaxSize = 2000000
 
+// WebhookEvents is the canonical set of events a webhook may subscribe to. It
+// backs both the webhooks.event select below and the API Server's registration
+// whitelist, so the two cannot drift — an event missing from either one is
+// dispatched but unsubscribable.
+var WebhookEvents = []string{
+	"sms:received", "sms:sent", "sms:delivered", "sms:failed",
+	"sms:data-received", "mms:received", "mms:downloaded",
+	"call:received", "call:sent", "call:failed",
+}
+
 // collectionsSchema is the desired field set per collection.
 var collectionsSchema = map[string][]fieldDef{
 	// Tenants users belong to. A superadmin spans all of them; an admin manages
@@ -106,11 +116,7 @@ var collectionsSchema = map[string][]fieldDef{
 	},
 	// Per-owner webhook subscriptions for message/call lifecycle events.
 	"webhooks": {
-		fSelect("event", []string{
-			"sms:received", "sms:sent", "sms:delivered", "sms:failed",
-			"sms:data-received", "mms:received", "mms:downloaded",
-			"call:received", "call:sent", "call:failed",
-		}, false),
+		fSelect("event", WebhookEvents, false),
 		fURL("url", true),
 		fRelation("device", "devices", false, false),
 		fRelation("owner", "users", true, true),

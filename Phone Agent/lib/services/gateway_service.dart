@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../config.dart';
+import '../models/message.dart';
 import 'api_client.dart';
 import 'crypto_service.dart';
 import 'sms_service.dart';
@@ -40,6 +41,9 @@ class GatewayService extends ChangeNotifier {
   StreamSubscription<SmsStatus>? _statusSub;
   StreamSubscription<IncomingCall>? _callSub;
   bool _polling = false;
+
+  /// Messages pulled before their `schedule_at`, held until they come due.
+  final List<GatewayMessage> _deferred = [];
 
   /// Rebuilt on each use so a passphrase change in Settings takes effect without
   /// restarting the gateway. Encryption is off when no passphrase is set.
@@ -99,12 +103,43 @@ class GatewayService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Merges freshly pulled messages with any parked for a future `schedule_at`,
+  /// returning those ready to send now and re-parking the rest.
+  ///
+  /// The server already withholds scheduled messages until they come due; this
+  /// only catches one handed over early by an older server. A parked message has
+  /// already been marked Processed server-side, so if the app dies before it
+  /// comes due the expiry sweeper fails it — which beats sending at the wrong
+  /// time.
+  List<GatewayMessage> _dueFrom(List<GatewayMessage> pulled) {
+    final due = <GatewayMessage>[];
+    for (final m in [..._deferred, ...pulled]) {
+      if (m.isDue) {
+        due.add(m);
+      } else if (!_deferred.any((d) => d.id == m.id)) {
+        _deferred.add(m);
+        _log0('Holding ${m.id} until '
+            '${m.scheduleAt!.toString().substring(0, 16)}');
+      }
+    }
+    _deferred.removeWhere((m) => m.isDue);
+    return due;
+  }
+
   Future<void> _poll() async {
     if (_polling || !_running) return;
     _polling = true;
     try {
-      final messages = await api.pullMessages();
-      for (final m in messages) {
+      // A failed pull must not strand messages already parked for a schedule, so
+      // it is logged here and the loop continues with whatever is in hand.
+      var pulled = const <GatewayMessage>[];
+      try {
+        pulled = await api.pullMessages();
+      } catch (e) {
+        _log0('Poll error: $e', error: true);
+      }
+
+      for (final m in _dueFrom(pulled)) {
         var handedOff = true;
 
         // Decrypt recipients + text when the message is end-to-end encrypted.

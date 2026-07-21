@@ -135,13 +135,18 @@ Any send may set `encrypted: true`, in which case `phone_numbers` + `text_messag
 hold client-side ciphertext (see **End-to-end encryption** below) that the server
 stores and relays verbatim.
 
+`schedule_at` defers a send: the message stays `Pending` and is withheld from
+`GET /api/mobile/v1/messages` until that time passes, so a device never sees it
+early. Its expiry timeout is measured from the scheduled time rather than from
+creation, giving a device its normal window to pick the message up once due.
+
 ### Mobile / device endpoints
 
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/mobile/v1/device` | Register device (auth: **user JWT**) → returns `auth_token` |
 | `POST` | `/api/mobile/v1/ping` | Heartbeat (auth: device token). Optional body `{sims: [...]}` advertises the device's SIM slots |
-| `GET` | `/api/mobile/v1/messages` | Pull pending messages; marks them `Processed` |
+| `GET` | `/api/mobile/v1/messages` | Pull pending messages that are due; marks them `Processed` |
 | `PATCH` | `/api/mobile/v1/messages/{id}` | Report `{status, error?}` (`Sent`/`Delivered`/`Failed`) |
 | `POST` | `/api/mobile/v1/inbox` | Report received SMS/data/MMS `{type?, phone_number, message, data_payload?, data_port?, subject?, attachments?, received_at?, sim_slot?, encrypted?}` |
 | `POST` | `/api/mobile/v1/calls` | Report a call event `{phone_number, direction, status, sim_slot?, duration?, started_at?}` |

@@ -17,40 +17,51 @@ API Server  ──(pending messages)──►  Phone Agent  ──►  SmsManage
 > not-yet-started surface that will mirror the Web App. This one *controls the
 > phone* (SMS/MMS + calls).
 
-## Status: source scaffold
-
-This folder contains the complete Dart app and the native Android (Kotlin) SMS
-bridge, but **not** the generated Gradle/platform scaffolding. You generate that
-once with `flutter create` after installing the toolchain (below).
-
 ## Prerequisites
 
 1. **Flutter SDK** (stable) — https://docs.flutter.dev/get-started/install/windows
-2. **JDK 17** (this machine currently has only JDK 8 — Android Gradle needs 17+)
+2. **JDK 17+** — Android Gradle will not build on JDK 8
 3. **Android SDK** (via Android Studio or `flutter doctor --android-licenses`)
 4. A **physical Android phone** with a SIM (the emulator can't send real SMS)
 
 Verify with `flutter doctor` — resolve anything it flags before continuing.
 
-## Generate platform scaffolding & wire in the native code
+## Set up
 
-From this `Phone Agent/` folder:
+The Dart app *and* the Android Gradle project are both committed, so a fresh
+clone only needs packages:
 
 ```powershell
-# 1. Generate the android/ Gradle project (keeps lib/ and pubspec.yaml)
-flutter create . --org app.smsgateway --project-name sms_gateway_phone --platforms=android
-
-# 2. Overlay the SMS-enabled manifest + Kotlin (overwrites the generated stubs)
-Copy-Item -Recurse -Force android_overlay/* android/
-
-# 3. Fetch packages
 flutter pub get
 ```
 
-`android_overlay/` mirrors the real `android/` paths, so step 2 drops:
-- `app/src/main/AndroidManifest.xml` — SMS permissions + the `SmsReceiver`
-- `app/src/main/kotlin/app/smsgateway/sms_gateway_phone/MainActivity.kt` — send bridge
-- `app/src/main/kotlin/app/smsgateway/sms_gateway_phone/SmsReceiver.kt` — incoming bridge
+The Gradle **wrapper** is not committed (`gradlew`, `gradlew.bat`,
+`gradle/wrapper/gradle-wrapper.jar`). If those are missing, regenerate the
+platform files in place — it leaves `lib/` and `pubspec.yaml` alone:
+
+```powershell
+flutter create . --org app.gsmnode --project-name phone --platforms=android
+```
+
+> The application id is **`app.gsmnode.phone`** (`namespace` + `applicationId` in
+> `android/app/build.gradle`, and the Kotlin package under
+> `android/app/src/main/kotlin/app/gsmnode/phone/`). The Dart package name is
+> `sms_gateway_phone`, which is deliberately different — don't "fix" one to match
+> the other, and don't rename either: it changes the installed app's identity.
+
+`flutter create` overwrites the generated stubs, so re-apply the native bridge
+afterwards. `android_overlay/` mirrors the real `android/` paths for exactly
+this — it is a byte-identical copy of the Kotlin and manifest under `android/`:
+
+```powershell
+Copy-Item -Recurse -Force android_overlay/* android/
+```
+
+It carries `app/src/main/AndroidManifest.xml` (SMS/MMS/call permissions and the
+receivers) plus the Kotlin bridge in `app/src/main/kotlin/app/gsmnode/phone/`:
+`MainActivity.kt` (send), `SmsReceiver.kt` / `MmsReceiver.kt` / `CallReceiver.kt`
+(inbound), `SmsStatusReceiver.kt` (delivery reports), `MmsPduBuilder.kt` and
+`GatewayForegroundService.kt`.
 
 If Gradle complains about SDK levels, set `minSdkVersion 23` (or higher) in
 `android/app/build.gradle`.
@@ -82,6 +93,12 @@ flutter run                # build & install on the connected phone
 | Report state | `PATCH /api/mobile/v1/messages/{id}` (`Sent`/`Failed`) |
 | Incoming SMS | `POST /api/mobile/v1/inbox` |
 | Heartbeat | `POST /api/mobile/v1/ping` |
+
+Scheduling is the server's job: `GET /messages` withholds anything whose
+`schedule_at` is still in the future, so the gateway sends what it is handed. It
+does check `schedule_at` and park an early message until it comes due, but only
+as a backstop against an older server — a parked message is already marked
+`Processed`, so if the app dies first the server's expiry sweeper fails it.
 
 Pulled items carry a `type` of `sms` or `call`. For `call` the app places a
 native phone call via `TelecomManager.placeCall` (needs `CALL_PHONE` — covered by
@@ -161,6 +178,10 @@ heartbeat, so the Web App / API can offer real slot choices.
   screen-lock, but surviving the user swiping the app away or hours of Doze would
   need a dedicated background Dart isolate (e.g. `flutter_background_service`).
 - **Push wake-up (FCM)**: register an FCM token at registration so the server can
-  wake the device instead of polling. Requires a Firebase project +
+  wake the device instead of polling. `registerDevice` already accepts a
+  `push_token`, but nothing populates it. Requires a Firebase project +
   `google-services.json` + server-side FCM sending in the API Server.
-- **MMS / data SMS**: only text SMS is implemented.
+- **Per-recipient delivery state**: a message with several recipients is one
+  server-side record, so all of its send/delivery callbacks report against the
+  same id and the last one wins. Mixed outcomes across recipients are therefore
+  not represented faithfully.

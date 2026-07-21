@@ -1,9 +1,13 @@
 // End-to-end encryption for message content and recipient numbers.
 //
 // When a passphrase is set, the Web App encrypts text_message + phone numbers
-// (and MMS subject) before they leave the browser, and decrypts inbox items on
-// the way in. The API Server and PocketBase only ever see ciphertext; the
-// passphrase never leaves this device (it lives in localStorage only).
+// before they leave the browser, and decrypts inbox items on the way in. The API
+// Server and PocketBase only ever see ciphertext; the passphrase never leaves
+// this device (it lives in localStorage only).
+//
+// Deliberately *not* encrypted: the MMS subject, data-SMS payloads and MMS
+// attachments. The phone leaves them alone in both directions too, so don't add
+// encryption on one end without the other.
 //
 // Wire format of an encrypted value:  "gsmenc:v1:" + base64( salt || iv || ct )
 //   salt = 16 random bytes   (PBKDF2)

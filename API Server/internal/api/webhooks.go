@@ -8,15 +8,21 @@ import (
 	"net/http"
 	"time"
 
+	"smsgateway/apiserver/internal/bootstrap"
 	"smsgateway/apiserver/internal/pb"
 )
 
-var validWebhookEvents = map[string]bool{
-	"sms:received":  true,
-	"sms:sent":      true,
-	"sms:delivered": true,
-	"sms:failed":    true,
-}
+// validWebhookEvents gates webhook registration. It is derived from the schema's
+// canonical list rather than restated here: PocketBase rejects any value outside
+// the collection's select options, and an event missing from this map is
+// silently unsubscribable even though the server dispatches it.
+var validWebhookEvents = func() map[string]bool {
+	m := make(map[string]bool, len(bootstrap.WebhookEvents))
+	for _, e := range bootstrap.WebhookEvents {
+		m[e] = true
+	}
+	return m
+}()
 
 type webhookDTO struct {
 	ID       string `json:"id"`

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../models/message.dart';
 import 'storage.dart';
@@ -55,14 +56,17 @@ class ApiClient {
     return storage.userEmail ?? email;
   }
 
-  /// Registers this device and stores the returned device token.
+  /// Registers this device and stores the returned device token. [appVersion]
+  /// defaults to the running build's version, so the server's device list can't
+  /// drift from what is actually installed.
   Future<void> registerDevice({
     required String deviceId,
     required String name,
     String platform = 'android',
-    String appVersion = '1.0.0',
+    String? appVersion,
     String? pushToken,
   }) async {
+    appVersion ??= await _appVersion();
     final res = await _http.post(
       _uri('/api/mobile/v1/device'),
       headers: _headers(storage.jwt),
@@ -156,6 +160,20 @@ class ApiClient {
       }),
     );
     _decode(res);
+  }
+
+  /// The running build's `version+build` string. Registration is not worth
+  /// failing over a missing platform channel, so this falls back to the version
+  /// declared in pubspec.yaml.
+  Future<String> _appVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      return info.buildNumber.isEmpty
+          ? info.version
+          : '${info.version}+${info.buildNumber}';
+    } catch (_) {
+      return '1.0.0';
+    }
   }
 
   /// Sends a heartbeat ping. When [sims] is provided it is reported to the
