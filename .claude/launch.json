@@ -16,6 +16,13 @@
       "port": 8080
     },
     {
+      "name": "web-app-bff",
+      "runtimeExecutable": "./web-app.exe",
+      "runtimeArgs": [],
+      "cwd": "Web App/server",
+      "port": 8090
+    },
+    {
       "name": "api-panel",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
