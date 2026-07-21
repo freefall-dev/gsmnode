@@ -73,9 +73,55 @@ order and grouping are carried over unchanged, API-status footer included.
 - **Inbox** — incoming SMS / data SMS / MMS, tabbed by type with counts. Inline
   previews for image attachments and decoded data-SMS payloads.
 - **Webhooks** — register and delete callbacks for the gateway's events.
-- **Settings** — server URL, display name, E2E passphrase, password change,
-  theme (light / dark / system), and — for managers — Users and Organizations,
-  plus the schema-driven **Integrations** forms.
+- **Settings** — server URL, display name, **app lock**, E2E passphrase, password
+  change, theme (light / dark / system), and — for managers — Users and
+  Organizations, plus the schema-driven **Integrations** forms.
+
+## App lock (face / fingerprint)
+
+**Settings → App lock** puts the phone's biometrics in front of a signed-in
+session. The session itself is unaffected — the JWT is persisted either way, and
+that is precisely the point: without a lock, anyone holding an unlocked phone has
+the gateway.
+
+This is [the Phone Agent's App lock](../Phone%20Agent/README.md), carried over
+rather than reinvented — same `AppLockController` / `BiometricService` /
+`AppLockGate` split, same `app_lock` preference key, same lifecycle rules, same
+`local_auth` major. The two surfaces differ only where a console differs from a
+gateway: the Agent arms on a *registered device* and keeps routing SMS behind its
+lock, this one arms on a *signed-in session* and has only the screen to guard.
+
+- It closes on a cold start, whenever the app has been in the background for
+  `AppConfig.appLockGrace` (30s), and **always on a close** — a detach is a
+  deliberate exit, where the grace period is only meant to absorb an
+  interruption like the photo picker on an MMS.
+- The prompt gates the switch in **both directions**: turning it on proves the
+  lock can be cleared before arming it, and turning it off stops someone holding
+  an already-unlocked phone from quietly disarming it.
+- The prompt is Android's `BiometricPrompt`, so the **screen lock (PIN, pattern,
+  password) is its own fallback** — a wet finger is not a lockout. It is not
+  `biometricOnly`.
+- A phone that can no longer prompt *at all* (biometrics gone and the screen lock
+  removed) disarms the lock and lets its owner back in. Otherwise the gate is a
+  one-way door: unlocking is impossible, and so is switching it off.
+- The gate is drawn *over* the navigator (`MaterialApp.builder`), not routed to:
+  it covers open dialogs and pushed routes, and the shell underneath is never
+  torn down, so a half-written SMS survives the phone being pocketed.
+- **Sign out instead** is offered on the lock screen, which the Agent's does not:
+  a console sign-out costs a password, where the Agent's would un-register the
+  phone. It is confirmed inline, there being no navigator above the gate to push
+  a dialog onto.
+- The preference survives a sign-out, like the server URL and the passphrase —
+  it is device setup, and leaving it armed is the safer default.
+
+It guards the running app, not the screenshot Android takes of it: the app
+switcher's thumbnail is captured on the way out, before the lock closes, so the
+last screen is still visible there. Hiding it would mean `FLAG_SECURE` on the
+activity (and a platform channel to toggle it with the setting) — not done.
+
+`widgets/app_lock_gate.dart` takes an injectable clock, so `test/widget_test.dart`
+covers the grace window, the detach rule and the stranded-phone escape by driving
+the lifecycle against a fake prompt — none of it needs a device.
 
 ## End-to-end encryption
 
@@ -102,7 +148,10 @@ lib/
     auth_store.dart             login state + the signed-in user
     crypto_service.dart         AES-256-GCM + PBKDF2 (matches the Web App)
     theme_controller.dart       light/dark/system preference
+    biometric_service.dart      face/fingerprint prompts (the Agent's, verbatim)
+    app_lock.dart               the App lock preference, armed by a prompt
   widgets/                      design-system pieces (cards, badges, selects…)
+    app_lock_gate.dart          the lock overlay + its lifecycle rules
   screens/
     login_screen.dart           sign in + server URL
     home_shell.dart             drawer navigation + app bar
@@ -143,7 +192,12 @@ Two Android settings in `android/gradle.properties` are load-bearing here:
   `image_picker` for MMS attachments.
 
 `INTERNET` is declared in the main manifest, not just the debug one — the app is
-nothing but an API client, so release builds need it too.
+nothing but an API client, so release builds need it too. `USE_BIOMETRIC` joins
+it for the app lock; neither is a runtime permission.
+
+`MainActivity` extends **`FlutterFragmentActivity`**, not `FlutterActivity`:
+`BiometricPrompt` is a fragment and needs a `FragmentActivity` host. Swapping it
+back turns every unlock attempt into a crash.
 
 ## Known gaps vs the Web App
 

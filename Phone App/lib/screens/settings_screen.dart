@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config.dart';
 import '../main.dart';
 import '../services/auth_store.dart';
 import '../theme.dart';
@@ -32,6 +33,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _nameSaved = false;
   String? _nameError;
 
+  // App lock
+  bool? _lockSupported;
+  String _lockMethod = 'Face or fingerprint';
+  bool _lockBusy = false;
+  String? _lockError;
+
   // End-to-end encryption
   late final _passphrase = TextEditingController(text: storage.encPassphrase);
   bool _showPassphrase = false;
@@ -43,6 +50,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _passwordSaving = false;
   bool _passwordSaved = false;
   String? _passwordError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLockCapability();
+  }
 
   @override
   void dispose() {
@@ -84,6 +97,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _nameSaving = false);
     }
+  }
+
+  Future<void> _loadLockCapability() async {
+    final supported = await biometrics.supported;
+    final method = await biometrics.methodLabel();
+    if (!mounted) return;
+    setState(() {
+      _lockSupported = supported;
+      _lockMethod = method;
+    });
+  }
+
+  Future<void> _toggleLock(bool value) async {
+    setState(() {
+      _lockBusy = true;
+      _lockError = null;
+    });
+    // The prompt gates both directions — see [AppLockController.setEnabled].
+    final out = await appLock.setEnabled(value);
+    if (!mounted) return;
+    setState(() {
+      _lockBusy = false;
+      _lockError = out.passed ? null : out.message;
+    });
   }
 
   void _savePassphrase() {
@@ -167,6 +204,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _serverSection(),
           const SizedBox(height: 14),
           _accountSection(user),
+          const SizedBox(height: 14),
+          _appLockSection(),
           const SizedBox(height: 14),
           _encryptionSection(),
           const SizedBox(height: 14),
@@ -294,6 +333,92 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             'Your email and role are managed by an administrator.',
             style: TextStyle(fontSize: 11, color: cg.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _appLockSection() {
+    final cg = context.cg;
+    final supported = _lockSupported;
+    final on = appLock.enabled;
+
+    return SectionCard(
+      title: 'App lock',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Ask for a face or fingerprint before this console will show '
+            'anything. Your session stays signed in — the lock only decides who '
+            'gets to see it, and closes again once the app has been in the '
+            'background for ${AppConfig.appLockGrace.inSeconds} seconds, or as '
+            'soon as the app is closed.',
+            style: TextStyle(fontSize: 13, color: cg.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Require $_lockMethod',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: (supported ?? false) ? cg.textPrimary : cg.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      // The screen lock is BiometricPrompt's own fallback, and
+                      // worth saying out loud: a failed finger isn't a lockout.
+                      // Switching this off asks for it too, so nobody holding an
+                      // already-unlocked phone can quietly disarm it.
+                      'Your PIN or pattern still works if the sensor won\'t. '
+                      'Turning this off asks for it as well.',
+                      style: TextStyle(fontSize: 12, color: cg.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Switch(
+                value: on,
+                onChanged:
+                    ((supported ?? false) && !_lockBusy) ? _toggleLock : null,
+              ),
+            ],
+          ),
+          if (supported == null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Checking what this phone supports…',
+              style: TextStyle(fontSize: 12, color: cg.textMuted),
+            ),
+          ] else if (!supported) ...[
+            const SizedBox(height: 12),
+            const MessageBanner(
+              'This phone has no biometric or screen lock to prompt with. Add '
+              'one in Android Settings, then come back.',
+              tone: BannerTone.info,
+            ),
+          ],
+          if (_lockError != null) ...[
+            const SizedBox(height: 12),
+            MessageBanner(_lockError!),
+          ],
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: MonoChip(
+              on ? 'Lock on' : 'Off',
+              color: on ? cg.success : cg.textMuted,
+              background: on ? cg.successTint : cg.sunkenBg,
+            ),
           ),
         ],
       ),

@@ -14,4 +14,10 @@ class AppConfig {
   /// How often the Devices list refreshes itself. Online/offline is derived
   /// from a heartbeat, so it changes with nobody touching the screen.
   static const Duration devicePollInterval = Duration(seconds: 10);
+
+  /// How long the app may sit in the background before the biometric lock
+  /// closes again. Short enough that a pocketed phone is protected, long enough
+  /// that the excursions the app itself causes — the photo picker on an MMS, a
+  /// glance at another app — don't demand a fingerprint on the way back.
+  static const Duration appLockGrace = Duration(seconds: 30);
 }

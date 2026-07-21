@@ -20,6 +20,13 @@ dependencies:
   image_picker: ^1.1.2
   # Locale-aware timestamps, standing in for the Web App's toLocaleString().
   intl: ^0.19.0
+  # Face / fingerprint app lock. Android's BiometricPrompt, which also offers the
+  # screen lock (PIN, pattern, password) as its own fallback. Pinned to the same
+  # major as the Phone Agent's — the two surfaces share this feature's code
+  # almost line for line, and 3.x reshapes the API (LocalAuthException in place
+  # of error_codes.dart, no AuthenticationOptions), so they move together or not
+  # at all.
+  local_auth: ^2.3.0
 
 dev_dependencies:
   flutter_test:

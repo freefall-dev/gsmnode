@@ -2,6 +2,9 @@
     <!-- The console is nothing but an API Server client, so it needs the network
          in release builds too (the debug/profile manifests only cover tooling). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The face/fingerprint app lock (Settings → App lock). Not required to
+         install: the app runs unlocked on a phone without a sensor. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <application
         android:label="gsmnode"

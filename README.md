@@ -33,7 +33,8 @@ Two distinct phone-side surfaces, deliberately kept separate:
 - **Phone Agent** — *controls the phone*: sends/receives SMS & MMS and
   makes/receives calls on behalf of the gateway.
 - **Phone App** — *controls the gateway*: a mobile mirror of the Web App, with
-  the same screens and the same functionality.
+  the same screens and the same functionality. It can optionally sit behind the
+  phone's own face/fingerprint lock (**Settings → App lock**).
 
 They install separately (`app.gsmnode.phone` and `app.gsmnode.console`) and can
 sit side by side on one device.

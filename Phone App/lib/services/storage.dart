@@ -8,6 +8,7 @@ class Storage {
   static const _kUser = 'user';
   static const _kEncPassphrase = 'enc_passphrase';
   static const _kThemePref = 'gsmnode-theme';
+  static const _kAppLock = 'app_lock';
 
   final SharedPreferences _prefs;
   Storage(this._prefs);
@@ -39,13 +40,20 @@ class Storage {
   String get themePref => _prefs.getString(_kThemePref) ?? 'system';
   set themePref(String v) => _set(_kThemePref, v);
 
+  /// Whether the console asks for a face or fingerprint before it will show a
+  /// signed-in session. Off by default — the phone's own lock screen is already
+  /// between a stranger and this app. Same key and name as the Phone Agent's.
+  bool get appLockEnabled => _prefs.getBool(_kAppLock) ?? false;
+  set appLockEnabled(bool v) => _prefs.setBool(_kAppLock, v);
+
   bool get isAuthenticated => (jwt ?? '').isNotEmpty;
 
   Future<void> clearSession() async {
     await _prefs.remove(_kJwt);
     await _prefs.remove(_kUser);
-    // The API base and passphrase survive a sign-out: both are device setup, not
-    // session state, and re-typing them on every login would be tedious.
+    // The API base, passphrase and app lock survive a sign-out: all three are
+    // device setup, not session state, and re-typing them on every login would
+    // be tedious. Leaving the lock armed is also the safer of the two defaults.
   }
 
   void _set(String key, String? v) {
