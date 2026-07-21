@@ -98,10 +98,10 @@ class SmsStatus {
 /// BroadcastReceivers (incoming SMS/data/MMS + calls), send/delivery
 /// PendingIntents (status), and the foreground service. See android_overlay/.
 class SmsService {
-  static const _method = MethodChannel('app.gsmnode/sms');
-  static const _events = EventChannel('app.gsmnode/sms_incoming');
-  static const _status = EventChannel('app.gsmnode/sms_status');
-  static const _calls = EventChannel('app.gsmnode/call_incoming');
+  static const _method = MethodChannel('app.gsmnode.phoneagent/sms');
+  static const _events = EventChannel('app.gsmnode.phoneagent/sms_incoming');
+  static const _status = EventChannel('app.gsmnode.phoneagent/sms_status');
+  static const _calls = EventChannel('app.gsmnode.phoneagent/call_incoming');
 
   /// Sends a text SMS via the device radio. [simSlot] is 0-based; null = default.
   /// [messageId] is echoed back on the status stream for correlation.

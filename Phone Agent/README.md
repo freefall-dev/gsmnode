@@ -45,9 +45,10 @@ flutter create . --org app.gsmnode --project-name phoneagent --platforms=android
 
 > The application id is **`app.gsmnode.phoneagent`** (`namespace` + `applicationId` in
 > `android/app/build.gradle`, and the Kotlin package under
-> `android/app/src/main/kotlin/app/gsmnode/phoneagent/`). The Dart package name is
-> `sms_gateway_phone`, which is deliberately different — don't "fix" one to match
-> the other, and don't rename either: it changes the installed app's identity.
+> `android/app/src/main/kotlin/app/gsmnode/phoneagent/`). The Dart package name in
+> `pubspec.yaml` is `phoneagent` to match, so the command above reproduces both from
+> `--org` + `--project-name`. Don't rename either: it changes the installed app's
+> identity, and Android treats a new id as a different app rather than an upgrade.
 
 `flutter create` overwrites the generated stubs, so re-apply the native bridge
 afterwards. `android_overlay/` mirrors the real `android/` paths for exactly

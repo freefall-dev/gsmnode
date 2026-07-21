@@ -1,4 +1,4 @@
-name: console
+name: phoneapp
 description: "gsmnode console — mobile mirror of the Web App."
 publish_to: "none"
 version: 1.0.0+1

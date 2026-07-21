@@ -2,14 +2,14 @@
 // the E2E crypto (which must stay wire-compatible with the Web App and the
 // Phone Agent) and the shared response helpers.
 
-import 'package:console/config.dart';
-import 'package:console/main.dart';
-import 'package:console/services/api_client.dart';
-import 'package:console/services/biometric_service.dart';
-import 'package:console/services/crypto_service.dart';
-import 'package:console/services/storage.dart';
-import 'package:console/theme.dart';
-import 'package:console/widgets/app_lock_gate.dart';
+import 'package:phoneapp/config.dart';
+import 'package:phoneapp/main.dart';
+import 'package:phoneapp/services/api_client.dart';
+import 'package:phoneapp/services/biometric_service.dart';
+import 'package:phoneapp/services/crypto_service.dart';
+import 'package:phoneapp/services/storage.dart';
+import 'package:phoneapp/theme.dart';
+import 'package:phoneapp/widgets/app_lock_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_auth/local_auth.dart';

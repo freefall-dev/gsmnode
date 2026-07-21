@@ -27,11 +27,11 @@ import io.flutter.plugin.common.MethodChannel
 class SmsBridge(private val ctx: Context) {
 
     companion object {
-        const val METHOD_CHANNEL = "app.gsmnode/sms"
-        const val EVENT_CHANNEL = "app.gsmnode/sms_incoming"
-        const val STATUS_CHANNEL = "app.gsmnode/sms_status"
-        const val CALL_CHANNEL = "app.gsmnode/call_incoming"
-        const val STATUS_ACTION = "app.gsmnode.SMS_STATUS"
+        const val METHOD_CHANNEL = "app.gsmnode.phoneagent/sms"
+        const val EVENT_CHANNEL = "app.gsmnode.phoneagent/sms_incoming"
+        const val STATUS_CHANNEL = "app.gsmnode.phoneagent/sms_status"
+        const val CALL_CHANNEL = "app.gsmnode.phoneagent/call_incoming"
+        const val STATUS_ACTION = "app.gsmnode.phoneagent.SMS_STATUS"
 
         // Sinks used by the broadcast receivers to push events into Dart. They
         // outlive any activity, which is the point — an SMS arriving while the

@@ -43,10 +43,10 @@ flutter create . --org app.gsmnode --project-name phoneapp --platforms=android
 
 > The application id is **`app.gsmnode.phoneapp`**, deliberately distinct from the
 > Phone Agent's `app.gsmnode.phoneagent` so both can be installed at once. It is
-> derived from `--org` + `--project-name` at create time. The Dart package name in
-> `pubspec.yaml` stays `console`, which is deliberately different — don't "fix" one
-> to match the other, and don't rename either: it changes the installed app's
-> identity (or, for the Dart name, every `package:console/…` import).
+> derived from `--org` + `--project-name` at create time, and the Dart package name
+> in `pubspec.yaml` is `phoneapp` to match, so the command above reproduces both.
+> Don't rename either: it changes the installed app's identity, and Android treats a
+> new id as a different app rather than an upgrade.
 
 On first launch, open **Server settings** on the sign-in screen and enter the API
 Server URL, then sign in with the user you created via

@@ -1,4 +1,4 @@
-name: sms_gateway_phone
+name: phoneagent
 description: gsmnode phone client — turns an Android phone into an SMS gateway controlled via the API Server.
 publish_to: "none"
 version: 1.0.0+1
