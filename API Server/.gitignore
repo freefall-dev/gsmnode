@@ -3,3 +3,5 @@
 /server.exe
 /tmp/
 *.log
+# Plugin enable-state + config (may hold secrets); see internal/plugins.
+plugins.json

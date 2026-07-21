@@ -73,7 +73,7 @@ func (s *Server) handleEnqueueCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deviceRecID, err := s.resolveDevice(r, uid, req.DeviceID)
+	deviceRecID, err := s.resolveDevice(r.Context(), uid, req.DeviceID)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return

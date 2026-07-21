@@ -104,6 +104,26 @@ Health check: `GET http://localhost:8080/api/health`.
 | `GET` | `/api/webhooks` | List webhooks |
 | `POST` | `/api/webhooks` | Register `{event, url, device_id?}` |
 | `DELETE` | `/api/webhooks/{id}` | Delete webhook |
+| `GET` | `/api/integrations/email-to-sms` | Your resolved Email-to-SMS settings (cascade) |
+| `PUT` | `/api/integrations/email-to-sms` | Save your (or your org's) IMAP mailbox `{enabled?, scope?, config?}` |
+| `POST` | `/api/integrations/email-to-sms/health` | Probe your resolved IMAP mailbox |
+
+### Plugins (superadmin)
+
+Extension services managed by a superadmin; built-in state persists to
+`plugins.json` (`PLUGINS_FILE`). See
+[`internal/plugins/README.md`](internal/plugins/README.md).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/admin/plugins` | List plugins + state + last health |
+| `PUT` | `/api/admin/plugins/{name}` | Enable/disable + configure `{enabled?, config?}` |
+| `POST` | `/api/admin/plugins` | Register an external plugin `{name, baseURL, provider?}` |
+| `DELETE` | `/api/admin/plugins/{name}` | Remove an external plugin |
+| `POST` | `/api/admin/plugins/{name}/health` | Run a health check |
+
+The built-in **`email-to-sms`** plugin turns inbound email (`<phone>@<domain>`)
+into outbound SMS via an SMTP server and/or IMAP polling.
 
 `POST /api/messages` accepts a `type` of `sms` (default), `data`, or `mms`:
 

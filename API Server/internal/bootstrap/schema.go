@@ -18,6 +18,8 @@ var collectionsSchema = map[string][]fieldDef{
 	// rejecting a duplicate.
 	"organizations": {
 		fText("name", true),
+		// Org-layer plugin/integration settings (cascade L2). See internal/api/integrations.go.
+		fJSON("pluginSettings", false, 100000),
 		fAutodate("created", true, false),
 	},
 	// Custom fields layered onto the built-in "users" auth collection. Only role
@@ -27,6 +29,8 @@ var collectionsSchema = map[string][]fieldDef{
 		fSelect("role", []string{"user", "admin", "superadmin"}, false),
 		// Organization membership. Non-cascading: deleting an org keeps its people.
 		fRelation("organization", "organizations", false, false),
+		// User-layer plugin/integration settings (cascade L3). See internal/api/integrations.go.
+		fJSON("pluginSettings", false, 100000),
 	},
 	// Registered phones. auth_token is the device's bearer credential.
 	"devices": {

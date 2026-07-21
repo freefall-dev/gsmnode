@@ -10,6 +10,10 @@ import (
 
 	"smsgateway/apiserver/internal/config"
 	"smsgateway/apiserver/internal/pb"
+	"smsgateway/apiserver/internal/plugins"
+	"smsgateway/apiserver/internal/plugins/builtin/emailtosms"
+
+	_ "smsgateway/apiserver/internal/plugins/builtin" // register built-in plugins
 )
 
 // Collection names in PocketBase.
@@ -25,14 +29,32 @@ const (
 
 // Server wires together the HTTP handlers and their dependencies.
 type Server struct {
-	mu  sync.RWMutex // guards the mutable Web App URL + CORS origins in cfg
-	cfg config.Config
-	pb  *pb.Client
+	mu      sync.RWMutex // guards the mutable Web App URL + CORS origins in cfg
+	cfg     config.Config
+	pb      *pb.Client
+	plugins *plugins.Manager
 }
 
 // New constructs a Server.
 func New(cfg config.Config, client *pb.Client) *Server {
-	return &Server{cfg: cfg, pb: client}
+	s := &Server{cfg: cfg, pb: client, plugins: plugins.NewManager(cfg.PluginsFile)}
+	// The email-to-sms builtin calls back into the app (authenticate a user,
+	// enqueue an SMS, list IMAP mailboxes) through this host adapter. Wiring it
+	// here — before StartPlugins loads any enabled instance — avoids the plugin
+	// importing the api package (an import cycle).
+	emailtosms.UseHost(&emailHost{s: s})
+	return s
+}
+
+// StartPlugins loads persisted plugin state and initialises enabled plugins. A
+// load error is non-fatal to the server; callers log it.
+func (s *Server) StartPlugins() error {
+	return s.plugins.Load()
+}
+
+// StopPlugins tears down every live plugin instance. Wire into graceful shutdown.
+func (s *Server) StopPlugins(ctx context.Context) {
+	s.plugins.Shutdown(ctx)
 }
 
 // pbSettings snapshots the PocketBase connection for the settings endpoints.
@@ -124,6 +146,22 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/webapp-config", s.requireSuperadminAuth(s.handleGetWebAppConfig))
 	mux.HandleFunc("POST /api/admin/webapp-config/test", s.requireSuperadminAuth(s.handleTestWebAppConfig))
 	mux.HandleFunc("PUT /api/admin/webapp-config", s.requireSuperadminAuth(s.handleUpdateWebAppConfig))
+
+	// Plugins — extension services managed by a superadmin (global config +
+	// enable state). See internal/plugins and internal/api/plugins.go.
+	mux.HandleFunc("GET /api/admin/plugins", s.requireSuperadminAuth(s.handleListPlugins))
+	mux.HandleFunc("POST /api/admin/plugins", s.requireSuperadminAuth(s.handleRegisterPlugin))
+	mux.HandleFunc("GET /api/admin/plugins/{name}", s.requireSuperadminAuth(s.handleGetPlugin))
+	mux.HandleFunc("PUT /api/admin/plugins/{name}", s.requireSuperadminAuth(s.handleUpdatePlugin))
+	mux.HandleFunc("DELETE /api/admin/plugins/{name}", s.requireSuperadminAuth(s.handleDeletePlugin))
+	mux.HandleFunc("POST /api/admin/plugins/{name}/health", s.requireSuperadminAuth(s.handlePluginHealth))
+
+	// Integrations — per-user plugin settings under the superadmin → org admin →
+	// user cascade (see integrations.go). Any authenticated user manages their
+	// own layer; the global layer is set by a superadmin in the Plugins panel.
+	mux.HandleFunc("GET /api/integrations/email-to-sms", s.requireUser(s.handleGetEmailToSMS))
+	mux.HandleFunc("PUT /api/integrations/email-to-sms", s.requireUser(s.handlePutEmailToSMS))
+	mux.HandleFunc("POST /api/integrations/email-to-sms/health", s.requireUser(s.handleEmailToSMSHealth))
 
 	mux.HandleFunc("GET /api/devices", s.requireUser(s.handleListDevices))
 	mux.HandleFunc("DELETE /api/devices/{id}", s.requireUser(s.handleDeleteDevice))

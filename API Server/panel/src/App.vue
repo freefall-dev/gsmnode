@@ -9,6 +9,7 @@ import UsersCard from "./components/UsersCard.vue";
 import OrgsCard from "./components/OrgsCard.vue";
 import PocketBaseCard from "./components/PocketBaseCard.vue";
 import WebAppCard from "./components/WebAppCard.vue";
+import PluginsCard from "./components/PluginsCard.vue";
 import EndpointTable from "./components/EndpointTable.vue";
 
 const booting = ref(true);
@@ -31,6 +32,7 @@ const sections = computed(() => {
     out.push(
       { id: "pocketbase", label: "PocketBase" },
       { id: "webapp", label: "Web App" },
+      { id: "plugins", label: "Plugins" },
     );
   }
   out.push({ id: "api", label: "API" });
@@ -86,6 +88,17 @@ const superadminApi = [
   { method: "POST", path: "/api/orgs", desc: "Create an organization" },
   { method: "PATCH", path: "/api/orgs/{id}", desc: "Rename an organization" },
   { method: "DELETE", path: "/api/orgs/{id}", desc: "Delete an organization (must be empty)" },
+  { method: "GET", path: "/api/admin/plugins", desc: "List plugins + state + last health" },
+  { method: "POST", path: "/api/admin/plugins", desc: "Register an external (HTTP) plugin" },
+  { method: "PUT", path: "/api/admin/plugins/{name}", desc: "Enable/disable + configure a plugin" },
+  { method: "DELETE", path: "/api/admin/plugins/{name}", desc: "Remove an external plugin" },
+  { method: "POST", path: "/api/admin/plugins/{name}/health", desc: "Run a plugin health check" },
+];
+
+const integrationsApi = [
+  { method: "GET", path: "/api/integrations/email-to-sms", desc: "Resolved email-to-SMS settings (cascade)" },
+  { method: "PUT", path: "/api/integrations/email-to-sms", desc: "Save your (or your org's) mailbox settings" },
+  { method: "POST", path: "/api/integrations/email-to-sms/health", desc: "Probe your resolved IMAP mailbox" },
 ];
 
 const mobileApi = [
@@ -152,12 +165,14 @@ const mobileApi = [
       <OrgsCard v-else-if="section === 'orgs'" />
       <PocketBaseCard v-else-if="section === 'pocketbase'" />
       <WebAppCard v-else-if="section === 'webapp'" />
+      <PluginsCard v-else-if="section === 'plugins'" />
 
       <template v-else-if="section === 'api'">
         <EndpointTable title="Auth" auth="Public / Bearer" :endpoints="authApi" />
         <EndpointTable title="Client API" auth="Bearer token" :endpoints="clientApi" />
         <EndpointTable title="User management" auth="Manager" :endpoints="managementApi" />
         <EndpointTable title="Superadmin" auth="Superadmin" :endpoints="superadminApi" />
+        <EndpointTable title="Integrations" auth="Bearer token" :endpoints="integrationsApi" />
         <EndpointTable title="Mobile API" auth="Device token" :endpoints="mobileApi" />
       </template>
     </template>

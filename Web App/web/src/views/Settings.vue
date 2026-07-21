@@ -8,6 +8,7 @@ import { themePref, setThemePref } from "../theme";
 import PageHeader from "../components/PageHeader.vue";
 import UsersManager from "../components/UsersManager.vue";
 import OrgManager from "../components/OrgManager.vue";
+import EmailToSmsSettings from "../components/EmailToSmsSettings.vue";
 import { getPassphrase, setPassphrase } from "../crypto";
 
 const router = useRouter();
@@ -193,6 +194,9 @@ const roleLabel = computed(() => {
         >{{ passphrase.trim() ? "Encryption on" : "Off" }}</span>
       </div>
     </section>
+
+    <!-- Email to SMS (per-user mailbox, resolved through the server cascade) -->
+    <EmailToSmsSettings />
 
     <!-- Change password -->
     <section class="mb-6 rounded-lg border border-subtle bg-card p-5 shadow-xs">

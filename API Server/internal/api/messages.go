@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -160,7 +162,7 @@ func (s *Server) handleEnqueueMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve the target device: explicit device_id, else the user's first
 	// online device.
-	deviceRecID, err := s.resolveDevice(r, uid, req.DeviceID)
+	deviceRecID, err := s.resolveDevice(r.Context(), uid, req.DeviceID)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return
@@ -208,10 +210,10 @@ func (s *Server) handleEnqueueMessage(w http.ResponseWriter, r *http.Request) {
 
 // resolveDevice returns the PocketBase device record id to target. requested may
 // be either the internal record id or the client-facing device_id.
-func (s *Server) resolveDevice(r *http.Request, uid, requested string) (string, error) {
+func (s *Server) resolveDevice(ctx context.Context, uid, requested string) (string, error) {
 	requested = strings.TrimSpace(requested)
 	if requested != "" {
-		dev, err := s.pb.FindFirst(r.Context(), colDevices,
+		dev, err := s.pb.FindFirst(ctx, colDevices,
 			"owner = "+pbQuote(uid)+" && (id = "+pbQuote(requested)+" || device_id = "+pbQuote(requested)+")", "")
 		if err != nil {
 			return "", err
@@ -221,13 +223,50 @@ func (s *Server) resolveDevice(r *http.Request, uid, requested string) (string, 
 		}
 		return asString(dev["id"]), nil
 	}
-	dev, err := s.pb.FindFirst(r.Context(), colDevices,
+	dev, err := s.pb.FindFirst(ctx, colDevices,
 		"owner = "+pbQuote(uid), "-last_seen_at")
 	if err != nil || dev == nil {
 		return "", err
 	}
 	return asString(dev["id"]), nil
 }
+
+// createSMS enqueues a plain outbound SMS owned by ownerID for one of that user's
+// devices — the same path as POST /api/messages, used by server-side producers
+// such as the email-to-sms plugin. It returns ErrNoDevice when the owner has no
+// device registered.
+func (s *Server) createSMS(ctx context.Context, ownerID string, phones []string, text string) (messageDTO, error) {
+	phones = cleanPhones(phones)
+	if len(phones) == 0 {
+		return messageDTO{}, errors.New("at least one phone number is required")
+	}
+	if strings.TrimSpace(text) == "" {
+		return messageDTO{}, errors.New("text_message is required")
+	}
+	deviceRecID, err := s.resolveDevice(ctx, ownerID, "")
+	if err != nil {
+		return messageDTO{}, err
+	}
+	if deviceRecID == "" {
+		return messageDTO{}, ErrNoDevice
+	}
+	rec, err := s.pb.Create(ctx, colMessages, pb.Record{
+		"phone_numbers": phones,
+		"text_message":  text,
+		"type":          msgTypeSMS,
+		"device":        deviceRecID,
+		"owner":         ownerID,
+		"status":        statusPending,
+		"encrypted":     false,
+	})
+	if err != nil {
+		return messageDTO{}, err
+	}
+	return recordToMessage(rec), nil
+}
+
+// ErrNoDevice is returned by createSMS when the owner has no registered device.
+var ErrNoDevice = errors.New("no device available; register a device first")
 
 // handleListMessages lists the user's messages with optional filters.
 func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {

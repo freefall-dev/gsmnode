@@ -24,6 +24,10 @@ type Config struct {
 	AllowOrigins  []string
 	MessageTTL    time.Duration
 
+	// PluginsFile is the local JSON store for plugin enable-state + config
+	// (see internal/plugins). It may hold secrets, so it is gitignored.
+	PluginsFile string
+
 	// Bootstrap, when true, has the server reconcile the PocketBase schema and
 	// ensure the super-admin on startup (see internal/bootstrap).
 	Bootstrap          bool
@@ -53,6 +57,7 @@ func Load() Config {
 		WebAppURL:     strings.TrimRight(getenv("WEBAPP_URL", "http://localhost:8090"), "/"),
 		AllowOrigins:  splitCSV(getenv("CORS_ALLOW_ORIGINS", "*")),
 		MessageTTL:    getdur("MESSAGE_TTL", 5*time.Minute),
+		PluginsFile:   getenv("PLUGINS_FILE", "plugins.json"),
 
 		// Schema + super-admin bootstrap on boot (idempotent). The super-admin is
 		// created only when both email and password are set.

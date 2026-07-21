@@ -198,6 +198,8 @@ const orgDefinition = {
   ...LOCKED,
   fields: [
     f.text("name", { required: true }),
+    // Org-layer plugin/integration settings (cascade L2). See internal/api/integrations.go.
+    f.json("pluginSettings", { maxSize: 100000 }),
     f.autodate("created", { onCreate: true, onUpdate: false }),
   ],
   indexes: ["CREATE UNIQUE INDEX idx_organizations_name ON organizations (name)"],
@@ -216,8 +218,12 @@ async function ensureUserFields(users, orgCollectionId) {
   if (!have.has("organization")) {
     additions.push(f.relation("organization", orgCollectionId));
   }
+  if (!have.has("pluginSettings")) {
+    // User-layer plugin/integration settings (cascade L3). See internal/api/integrations.go.
+    additions.push(f.json("pluginSettings", { maxSize: 100000 }));
+  }
   if (additions.length === 0) {
-    console.log('Collection "users" already has role + organization fields.');
+    console.log('Collection "users" already has role + organization + pluginSettings fields.');
     return;
   }
   await api("PATCH", `/api/collections/${users.id}`, { fields: [...users.fields, ...additions] });

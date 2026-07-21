@@ -49,6 +49,13 @@ func main() {
 
 	srv := api.New(cfg, client)
 
+	// Load persisted plugin state and start enabled plugins (e.g. the
+	// email-to-sms SMTP server / IMAP poller). Non-fatal: a plugin that fails to
+	// start must not stop the server coming up.
+	if err := srv.StartPlugins(); err != nil {
+		log.Printf("plugins: load failed: %v", err)
+	}
+
 	// Background worker that fails messages no device processed in time.
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
@@ -77,6 +84,7 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	srv.StopPlugins(ctx)
 	if err := httpServer.Shutdown(ctx); err != nil {
 		log.Printf("shutdown error: %v", err)
 	}
