@@ -124,6 +124,7 @@ const mobileApi = [
   { method: "POST", path: "/api/mobile/v1/inbox", desc: "Push a received SMS" },
   { method: "POST", path: "/api/mobile/v1/calls", desc: "Report a placed / received / failed call" },
   { method: "POST", path: "/api/mobile/v1/ping", desc: "Device heartbeat (also refreshes its SIM list)" },
+  { method: "POST", path: "/api/mobile/v1/offline", desc: "Report the gateway stopped, without waiting for the timeout" },
 ];
 </script>
 

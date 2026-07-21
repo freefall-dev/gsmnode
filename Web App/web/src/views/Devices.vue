@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { RefreshCw } from "@lucide/vue";
 import { api } from "../api";
 import PageHeader from "../components/PageHeader.vue";
@@ -9,8 +9,10 @@ const devices = ref([]);
 const loading = ref(true);
 const error = ref("");
 
-async function load() {
-  loading.value = true;
+// `quiet` refreshes without flashing the loading row — used by the poller so a
+// background refresh doesn't make the table blink every 10s.
+async function load({ quiet = false } = {}) {
+  if (!quiet) loading.value = true;
   error.value = "";
   try {
     const res = await api.get("/devices");
@@ -45,14 +47,22 @@ function simLabel(sim) {
   return parts.join(" · ");
 }
 
-onMounted(load);
+// Online/offline is derived from a heartbeat, so it changes without anyone
+// touching the page. Poll, or the table keeps insisting a dead phone is online
+// until someone hits refresh.
+let timer = null;
+onMounted(() => {
+  load();
+  timer = setInterval(() => load({ quiet: true }), 10000);
+});
+onUnmounted(() => clearInterval(timer));
 </script>
 
 <template>
   <div>
     <PageHeader title="Devices" subtitle="Phones connected to your gateway">
       <template #actions>
-        <button class="gn-btn-sec gn-btn-sm" @click="load">
+        <button class="gn-btn-sec gn-btn-sm" @click="load()">
           <RefreshCw class="h-3.5 w-3.5" />Refresh
         </button>
       </template>

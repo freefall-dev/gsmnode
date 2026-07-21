@@ -187,6 +187,7 @@ func (s *Server) Handler() http.Handler {
 	// the opaque device token returned at registration.
 	mux.HandleFunc("POST /api/mobile/v1/device", s.requireUser(s.handleRegisterDevice))
 	mux.HandleFunc("POST /api/mobile/v1/ping", s.requireDevice(s.handlePing))
+	mux.HandleFunc("POST /api/mobile/v1/offline", s.requireDevice(s.handleGoingOffline))
 	mux.HandleFunc("GET /api/mobile/v1/messages", s.requireDevice(s.handlePullMessages))
 	mux.HandleFunc("PATCH /api/mobile/v1/messages/{id}", s.requireDevice(s.handleReportMessage))
 	mux.HandleFunc("POST /api/mobile/v1/inbox", s.requireDevice(s.handleReceiveSMS))

@@ -66,7 +66,12 @@ const onlineWindow = 3 * time.Minute
 func recordToDevice(rec pb.Record) deviceDTO {
 	lastSeen := asString(rec["last_seen_at"])
 	status := "offline"
-	if deviceOnline(lastSeen) {
+	// A device that said goodbye is offline immediately, whatever the clock
+	// says: waiting out onlineWindow after an orderly stop showed a gateway as
+	// online for minutes after it had stopped routing. Every ping and every
+	// registration writes "online" back, so the stored field only ever holds
+	// "offline" between a deliberate stop and the next contact.
+	if deviceOnline(lastSeen) && asString(rec["status"]) != "offline" {
 		status = "online"
 	}
 	return deviceDTO{
@@ -272,6 +277,22 @@ func (s *Server) handleRegisterDevice(w http.ResponseWriter, r *http.Request) {
 		deviceDTO: recordToDevice(rec),
 		AuthToken: token,
 	})
+}
+
+// handleGoingOffline marks a device offline on request. The phone calls this
+// when its gateway is stopped, so the panel and Web App flip immediately rather
+// than waiting for onlineWindow to lapse. last_seen_at is left alone — the
+// device really was seen just now, it just isn't routing any more.
+func (s *Server) handleGoingOffline(w http.ResponseWriter, r *http.Request) {
+	device := deviceFromCtx(r.Context())
+	_, err := s.pb.Update(r.Context(), colDevices, asString(device["id"]), pb.Record{
+		"status": "offline",
+	})
+	if err != nil {
+		writeUpstreamError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "offline"})
 }
 
 type pingRequest struct {
