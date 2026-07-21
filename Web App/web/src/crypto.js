@@ -10,7 +10,7 @@
 //   iv   = 12 random bytes   (AES-GCM nonce)
 //   ct   = AES-GCM ciphertext+tag over the UTF-8 plaintext
 //
-// The Phone App implements the identical scheme (see Phone App/lib/services/
+// The Phone Agent implements the identical scheme (see Phone Agent/lib/services/
 // crypto_service.dart) so the two ends interoperate: PBKDF2-HMAC-SHA256,
 // 150000 iterations, AES-256-GCM.
 

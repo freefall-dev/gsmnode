@@ -1,13 +1,13 @@
 # gsmnode — API Server
 
 Go service that is the **single trusted entry point** in front of PocketBase.
-The Web App and Phone App talk only to this server; it performs all PocketBase
+The Web App and Phone Agent talk only to this server; it performs all PocketBase
 access as a superuser and enforces ownership in application logic.
 
 ```
-Web App  ─┐
-          ├─►  API Server (:8080)  ─►  PocketBase (10.2.1.10:8028)
-Phone App ─┘
+Web App     ─┐
+             ├─►  API Server (:8080)  ─►  PocketBase (10.2.1.10:8028)
+Phone Agent ─┘
 ```
 
 The server root (`GET /`) serves a gsmnode-branded **web panel**: a live health
@@ -83,7 +83,7 @@ Health check: `GET http://localhost:8080/api/health`.
 - **Client API** (`/api/...`): `Authorization: Bearer <JWT>` from `/api/auth/login`.
   Used by the Web App and integrators.
 - **Mobile API** (`/api/mobile/...`): `Authorization: Bearer <device_token>`
-  returned by device registration. Used by the Phone App.
+  returned by device registration. Used by the Phone Agent.
 
 ### Client / 3rd-party endpoints
 
@@ -190,7 +190,7 @@ recipient number (and decrypts the inbox) itself, marking the record
 `encrypted: true`. The API Server and PocketBase only ever store ciphertext —
 they never see the passphrase. The scheme is AES-256-GCM with a PBKDF2-HMAC-SHA256
 key (150k iterations); the wire form is `gsmenc:v1:` + base64(`salt16‖iv12‖ct`).
-The Web App (`web/src/crypto.js`) and Phone App
+The Web App (`web/src/crypto.js`) and Phone Agent
 (`lib/services/crypto_service.dart`) implement the identical format so they
 interoperate. With no passphrase set, everything is stored in cleartext as before.
 

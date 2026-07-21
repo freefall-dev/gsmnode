@@ -9,21 +9,28 @@ signal-green `#2E9E6B` on ink, Space Grotesk (display) · IBM Plex Sans (body) �
 JetBrains Mono (code/labels), the lowercase `gsm`+`node` wordmark, and the
 two-arrow routing mark. All three UI surfaces implement it (the Web App and API
 panel share a persisted light/dark toggle, `localStorage` key `gsmnode-theme`,
-`data-gsm-theme` attribute; the Phone App follows the system theme).
+`data-gsm-theme` attribute; the Phone Agent follows the system theme).
 
-Three application surfaces sit in front of a shared PocketBase. **The API Server
-is the only component that talks to PocketBase**; the Web App and Phone App talk
-only to the API Server.
+The application surfaces sit in front of a shared PocketBase. **The API Server
+is the only component that talks to PocketBase**; every other surface talks only
+to the API Server.
 
 ```
 ┌────────────┐        ┌──────────────────┐        ┌──────────────┐
 │  Web App   │───────►│                  │───────►│              │
 │ (Vue/Go)   │        │   API Server     │        │  PocketBase  │
 ├────────────┤        │     (Go)         │        │ 10.2.1.10:   │
-│ Phone App  │───────►│                  │───────►│    8028      │
+│Phone Agent │───────►│                  │───────►│    8028      │
 │ (Flutter)  │        └──────────────────┘        └──────────────┘
 └────────────┘
 ```
+
+Two distinct phone-side surfaces, deliberately kept separate:
+
+- **Phone Agent** — *controls the phone*: sends/receives SMS & MMS and
+  makes/receives calls on behalf of the gateway.
+- **Phone App** — *not started yet*: will be a mobile mirror of the Web App,
+  with the same functionality.
 
 ## Surfaces
 
@@ -31,7 +38,8 @@ only to the API Server.
 |---|---|---|---|
 | [`API Server/`](API%20Server/) | Go | `:8080` | ✅ Built & verified (live E2E) |
 | [`Web App/`](Web%20App/) | Go BFF + Vue 3 + Tailwind | `:8090` | ✅ Built & verified |
-| [`Phone App/`](Phone%20App/) | Flutter (Android) | — | ✅ Built & run on a real device; foreground service + delivery reports |
+| [`Phone Agent/`](Phone%20Agent/) | Flutter (Android) | — | ✅ Built & run on a real device; foreground service + delivery reports |
+| [`Phone App/`](Phone%20App/) | Flutter (planned) | — | ⏳ Empty placeholder — mobile mirror of the Web App |
 | [`Home Assistant Plugin/`](Home%20Assistant%20Plugin/) | HA custom component (Python) | — | ✅ `notify.gsmnode` service; flow validated |
 
 ## PocketBase collections
@@ -65,7 +73,7 @@ ownership in application logic.
    cd "Web App"; ./server/Run-WebApp.ps1
    ```
    Open http://localhost:8090 and sign in.
-4. **Phone App** — see [`Phone App/README.md`](Phone%20App/README.md) (install
+4. **Phone Agent** — see [`Phone Agent/README.md`](Phone%20Agent/README.md) (install
    Flutter + JDK 17, `flutter create`, copy `android_overlay/`, `flutter run`).
 
 ## Message lifecycle
@@ -104,7 +112,7 @@ derived from that declaration — no per-plugin API or UI code.
 ## End-to-end encryption
 
 Optional and opt-in: set a shared passphrase in the Web App (Settings) and Phone
-App (login). Message text and recipient numbers are then AES-256-GCM encrypted in
+Agent (login). Message text and recipient numbers are then AES-256-GCM encrypted in
 the browser/phone before they reach the API Server, which stores only ciphertext.
 See [`API Server/README.md`](API%20Server/README.md) for the wire format.
 
@@ -112,4 +120,4 @@ See [`API Server/README.md`](API%20Server/README.md) for the wire format.
 
 - [API Server README](API%20Server/README.md) — full endpoint reference, setup
 - [Web App README](Web%20App/README.md) — dev/build, pages
-- [Phone App README](Phone%20App/README.md) — Flutter build + native SMS wiring
+- [Phone Agent README](Phone%20Agent/README.md) — Flutter build + native SMS wiring

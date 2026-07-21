@@ -1,5 +1,5 @@
 // Command server runs the gsmnode API Server. It is the single trusted
-// entry point in front of PocketBase: the Web App and Phone App talk only to
+// entry point in front of PocketBase: the Web App and Phone Agent talk only to
 // this service, which in turn performs all PocketBase access.
 package main
 

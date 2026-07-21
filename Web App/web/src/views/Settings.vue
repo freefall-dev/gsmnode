@@ -211,7 +211,7 @@ const subtitle = computed(() =>
         Set a shared passphrase to encrypt message text and recipient numbers before
         they leave this browser. The server and database only ever store ciphertext.
         The passphrase is kept in this browser only and never sent anywhere — enter the
-        same one on every device (Web App and Phone App) that must read the messages.
+        same one on every device (Web App and Phone Agent) that must read the messages.
       </p>
       <div class="flex flex-wrap items-center gap-2">
         <input

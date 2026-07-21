@@ -1,17 +1,21 @@
-# gsmnode — Phone App (Flutter / Android)
+# gsmnode — Phone Agent (Flutter / Android)
 
 Turns an Android phone into the SMS gateway endpoint. It registers with the API
 Server, polls for pending outbound messages, sends them over the radio, reports
 delivery state, and forwards incoming SMS to the server's inbox.
 
 ```
-API Server  ──(pending messages)──►  Phone App  ──►  SmsManager (send)
-     ▲                                    │
-     └──(status reports / inbox)──────────┘  ◄── BroadcastReceiver (incoming)
+API Server  ──(pending messages)──►  Phone Agent  ──►  SmsManager (send)
+     ▲                                     │
+     └──(status reports / inbox)───────────┘  ◄── BroadcastReceiver (incoming)
 ```
 
-> The Phone App talks **only** to the API Server (never to PocketBase directly),
+> The Phone Agent talks **only** to the API Server (never to PocketBase directly),
 > using the device token issued at registration.
+
+> **Not to be confused with the `Phone App/` folder** — that is a separate,
+> not-yet-started surface that will mirror the Web App. This one *controls the
+> phone* (SMS/MMS + calls).
 
 ## Status: source scaffold
 
@@ -30,7 +34,7 @@ Verify with `flutter doctor` — resolve anything it flags before continuing.
 
 ## Generate platform scaffolding & wire in the native code
 
-From this `Phone App/` folder:
+From this `Phone Agent/` folder:
 
 ```powershell
 # 1. Generate the android/ Gradle project (keeps lib/ and pubspec.yaml)
