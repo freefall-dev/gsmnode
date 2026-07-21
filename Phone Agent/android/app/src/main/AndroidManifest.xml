@@ -27,7 +27,7 @@
 
     <application
         android:label="gsmnode agent"
-        android:name="${applicationName}"
+        android:name=".GsmNodeApplication"
         android:icon="@mipmap/ic_launcher">
 
         <activity

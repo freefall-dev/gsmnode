@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'config.dart';
@@ -30,6 +32,9 @@ Future<void> main() async {
   appLock = AppLockController();
 
   runApp(const GsmNodeApp());
+
+  // Pick the gateway back up if the process was restarted under it.
+  unawaited(gateway.resume());
 }
 
 class GsmNodeApp extends StatelessWidget {

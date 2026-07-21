@@ -10,6 +10,7 @@ class Storage {
   static const _kUserEmail = 'user_email';
   static const _kEncPassphrase = 'enc_passphrase';
   static const _kAppLock = 'app_lock';
+  static const _kGatewayEnabled = 'gateway_enabled';
 
   final SharedPreferences _prefs;
   Storage(this._prefs);
@@ -45,6 +46,13 @@ class Storage {
   /// nothing enrolled must not start out locked.
   bool get appLockEnabled => _prefs.getBool(_kAppLock) ?? false;
   set appLockEnabled(bool v) => _prefs.setBool(_kAppLock, v);
+
+  /// Whether the user wants the gateway routing. Survives a restart so a
+  /// process the system killed and re-spawned (the foreground service is
+  /// START_STICKY) comes back routing instead of sitting there idle behind a
+  /// notification that claims otherwise.
+  bool get gatewayEnabled => _prefs.getBool(_kGatewayEnabled) ?? false;
+  set gatewayEnabled(bool v) => _prefs.setBool(_kGatewayEnabled, v);
 
   bool get isRegistered => (deviceToken ?? '').isNotEmpty;
 

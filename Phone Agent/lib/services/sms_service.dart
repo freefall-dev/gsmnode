@@ -163,6 +163,10 @@ class SmsService {
   Future<void> startBackgroundService() => _method.invokeMethod('startService');
   Future<void> stopBackgroundService() => _method.invokeMethod('stopService');
 
+  /// Whether the foreground service is live — the notification the user sees.
+  Future<bool> isServiceRunning() async =>
+      (await _method.invokeMethod<bool>('isServiceRunning')) ?? false;
+
   /// Stream of incoming SMS / data SMS / MMS (active while the process is alive).
   Stream<IncomingSms> incomingSms() {
     return _events.receiveBroadcastStream().map((event) {

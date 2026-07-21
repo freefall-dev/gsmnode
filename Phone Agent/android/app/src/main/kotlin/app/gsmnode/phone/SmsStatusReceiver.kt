@@ -8,7 +8,7 @@ import android.os.Handler
 import android.os.Looper
 
 /// Receives SMS send/delivery outcomes from the PendingIntents created in
-/// MainActivity.sendSms and forwards them to Dart, tagged with the message id
+/// SmsBridge.sendSms and forwards them to Dart, tagged with the message id
 /// so the gateway loop can report Sent / Delivered / Failed to the API Server.
 class SmsStatusReceiver : BroadcastReceiver() {
 
@@ -27,7 +27,7 @@ class SmsStatusReceiver : BroadcastReceiver() {
         )
 
         Handler(Looper.getMainLooper()).post {
-            MainActivity.statusSink?.success(payload)
+            SmsBridge.statusSink?.success(payload)
         }
     }
 }

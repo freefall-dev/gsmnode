@@ -186,4 +186,14 @@ class ApiClient {
     );
     _decode(res);
   }
+
+  /// Tells the server this device has stopped routing, so the panel and Web App
+  /// show it offline at once instead of waiting out the heartbeat timeout.
+  Future<void> reportOffline() async {
+    final res = await _http.post(
+      _uri('/api/mobile/v1/offline'),
+      headers: _headers(storage.deviceToken),
+    );
+    _decode(res);
+  }
 }

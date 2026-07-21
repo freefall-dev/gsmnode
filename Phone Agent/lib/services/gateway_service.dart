@@ -52,6 +52,7 @@ class GatewayService extends ChangeNotifier {
   void start() {
     if (_running) return;
     _running = true;
+    api.storage.gatewayEnabled = true;
     _log0('Gateway started');
 
     // Keep the process alive while the screen is off / app backgrounded.
@@ -76,6 +77,23 @@ class GatewayService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Restores a gateway the user had left running, after a cold start.
+  ///
+  /// Normally the cached engine keeps this object alive across the app being
+  /// closed, so there is nothing to restore. This covers the harder case: the
+  /// system killed the process and START_STICKY brought the service back, so
+  /// Dart starts from scratch while the notification still promises a running
+  /// gateway. A lingering service with the preference unset means the flag
+  /// predates this build — believe what the user can see.
+  Future<void> resume() async {
+    if (_running || !api.storage.isRegistered) return;
+    var wanted = api.storage.gatewayEnabled;
+    if (!wanted) {
+      wanted = await sms.isServiceRunning().catchError((_) => false);
+    }
+    if (wanted) start();
+  }
+
   /// Logs the detected SIMs once (best-effort; enumeration needs the phone
   /// permission, which may still be pending when the gateway first starts).
   Future<void> _logSims() async {
@@ -93,12 +111,18 @@ class GatewayService extends ChangeNotifier {
 
   void stop() {
     _running = false;
+    api.storage.gatewayEnabled = false;
     _pollTimer?.cancel();
     _pingTimer?.cancel();
     _incomingSub?.cancel();
     _statusSub?.cancel();
     _callSub?.cancel();
     sms.stopBackgroundService().catchError((_) {});
+    // Best-effort: tell the server we've gone quiet so the consoles don't show
+    // this phone as online until the heartbeat times out. If it fails (no
+    // network — the usual reason the gateway is stopping) the timeout still
+    // catches it.
+    api.reportOffline().catchError((_) {});
     _log0('Gateway stopped');
     notifyListeners();
   }

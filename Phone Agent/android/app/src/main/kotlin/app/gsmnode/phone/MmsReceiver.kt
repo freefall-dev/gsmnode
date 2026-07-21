@@ -30,7 +30,7 @@ class MmsReceiver : BroadcastReceiver() {
         payload["timestamp"] = System.currentTimeMillis()
 
         Handler(Looper.getMainLooper()).post {
-            MainActivity.incomingSink?.success(payload)
+            SmsBridge.incomingSink?.success(payload)
         }
     }
 

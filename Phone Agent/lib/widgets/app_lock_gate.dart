@@ -33,6 +33,12 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
   String? _error;
   DateTime? _leftAt;
 
+  /// Set when the UI was torn off the engine entirely — the app was closed
+  /// rather than merely backgrounded. Since GsmNodeApplication caches the
+  /// engine, that no longer restarts Dart, so this is the only trace left that
+  /// the app was closed, and it re-locks on return regardless of the grace.
+  bool _wasDetached = false;
+
   @override
   void initState() {
     super.initState();
@@ -63,16 +69,29 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
     // dialog — which would loop forever.
     if (_prompting) return;
 
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
-      _leftAt = DateTime.now();
-    } else if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed) {
       final away = DateTime.now().difference(_leftAt ?? DateTime.now());
-      if (appLock.armed && !_locked && away >= _grace) {
+      // Closing the app is a deliberate exit, so it always costs a prompt on
+      // return; the grace period is only meant to absorb brief interruptions
+      // like a notification or the SIM chooser.
+      final mustLock = _wasDetached || away >= _grace;
+      // Clear both before acting, so the next trip out is timed from scratch
+      // rather than from a stamp left over by this one.
+      _wasDetached = false;
+      _leftAt = null;
+      if (appLock.armed && !_locked && mustLock) {
         setState(() => _locked = true);
         _unlock();
       }
+      return;
     }
+
+    // Every other state means the UI is on its way out. Stamp the clock on the
+    // first of them — Android delivers inactive → paused → detached, and which
+    // ones arrive varies by version, so this must not depend on catching a
+    // particular one.
+    _leftAt ??= DateTime.now();
+    if (state == AppLifecycleState.detached) _wasDetached = true;
   }
 
   Future<void> _unlock() async {

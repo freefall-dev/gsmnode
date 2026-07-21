@@ -7,7 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.telephony.TelephonyManager
 
-/// Surfaces incoming and outgoing call events to Dart via MainActivity.callSink.
+/// Surfaces incoming and outgoing call events to Dart via SmsBridge.callSink.
 ///
 /// Android reports call state as transitions (RINGING → OFFHOOK → IDLE), not
 /// discrete events, so we keep a little state across broadcasts to classify each
@@ -90,7 +90,7 @@ class CallReceiver : BroadcastReceiver() {
         payload["timestamp"] = System.currentTimeMillis()
         if (duration != null) payload["duration"] = duration
         Handler(Looper.getMainLooper()).post {
-            MainActivity.callSink?.success(payload)
+            SmsBridge.callSink?.success(payload)
         }
     }
 }

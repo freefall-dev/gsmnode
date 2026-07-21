@@ -12,7 +12,7 @@ import android.telephony.SubscriptionManager
 import androidx.core.content.ContextCompat
 
 /// Receives incoming SMS and forwards each message to Dart via the EventChannel
-/// sink held by MainActivity. Works while the app process is alive.
+/// sink held by SmsBridge. Works while the app process is alive.
 class SmsReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -83,7 +83,7 @@ class SmsReceiver : BroadcastReceiver() {
     private fun emit(payload: Map<String, Any?>) {
         // EventSink must be touched on the main thread.
         Handler(Looper.getMainLooper()).post {
-            MainActivity.incomingSink?.success(payload)
+            SmsBridge.incomingSink?.success(payload)
         }
     }
 

@@ -28,6 +28,12 @@ class GatewayForegroundService : Service() {
         private const val CHANNEL_ID = "sms_gateway_service"
         private const val NOTIFICATION_ID = 4711
 
+        /// Whether the service is live, so Dart can reconcile its own state with
+        /// the notification the user can see rather than assuming.
+        @Volatile
+        var isRunning: Boolean = false
+            private set
+
         fun start(context: Context) {
             val intent = Intent(context, GatewayForegroundService::class.java)
             ContextCompat.startForegroundService(context, intent)
@@ -41,6 +47,7 @@ class GatewayForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        isRunning = true
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -90,6 +97,7 @@ class GatewayForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        isRunning = false
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         super.onDestroy()
