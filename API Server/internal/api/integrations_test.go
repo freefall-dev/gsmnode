@@ -235,6 +235,47 @@ func TestScopeViewMasking(t *testing.T) {
 	}
 }
 
+// The org-scope form the Web App renders for an org admin depends on this: a
+// value imposed globally stays locked, but one a member set for themselves does
+// not block the admin from setting an organization-wide value over it.
+func TestScopeViewOrgLayer(t *testing.T) {
+	spec := e2sSpec()
+	res := integrationResolution{
+		spec:    spec,
+		eff:     map[string]string{emailtosms.FieldMailbox: "INBOX", emailtosms.FieldHost: "mine.example.com"},
+		userOwn: map[string]string{emailtosms.FieldHost: "mine.example.com"},
+		orgOwn:  map[string]string{emailtosms.FieldPort: "993"},
+		source: map[string]string{
+			emailtosms.FieldMailbox: "global",
+			emailtosms.FieldHost:    "user",
+			emailtosms.FieldPort:    "org",
+		},
+	}
+
+	scope := scopeView(res, "org")
+	if scope["editableLayer"] != "org" {
+		t.Errorf("editableLayer = %v, want org", scope["editableLayer"])
+	}
+	fields := scope["fields"].(map[string]fieldView)
+
+	if !fields[emailtosms.FieldMailbox].Locked {
+		t.Error("a globally-set field must stay locked for an org admin")
+	}
+	if fields[emailtosms.FieldHost].Locked {
+		t.Error("a member's own value must not lock the org layer")
+	}
+	if fields[emailtosms.FieldPort].Locked {
+		t.Error("the org's own value must be editable by the org admin")
+	}
+	// The org form edits the org's values, not the admin's personal ones.
+	if got := fields[emailtosms.FieldPort].Own; got != "993" {
+		t.Errorf("org scope own = %q, want the org's value", got)
+	}
+	if got := fields[emailtosms.FieldHost].Own; got != "" {
+		t.Errorf("org scope own = %q, want empty — that value is the admin's personal one", got)
+	}
+}
+
 // A superadmin edits the global layer in the Plugins panel, so every field is
 // locked here and no secret leaks through the view.
 func TestScopeViewSuperadminLocksEverything(t *testing.T) {

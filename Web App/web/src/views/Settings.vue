@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
-import { Sun, Moon, Monitor, LogOut } from "@lucide/vue";
+import { Sun, Moon, Monitor, LogOut, SlidersHorizontal, Puzzle } from "@lucide/vue";
 import { api } from "../api";
 import { auth } from "../store/auth";
 import { themePref, setThemePref } from "../theme";
@@ -126,12 +126,49 @@ const roleLabel = computed(() => {
   const r = user.value.role || "user";
   return r.charAt(0).toUpperCase() + r.slice(1);
 });
+
+// --- Tabs ---
+//
+// Integrations are their own tab: the list grows with every plugin that offers
+// per-user settings, and it has nothing to do with the account controls.
+
+const tab = ref("general");
+
+const tabs = [
+  { id: "general", label: "General", icon: SlidersHorizontal },
+  { id: "integrations", label: "Integrations", icon: Puzzle },
+];
+
+const subtitle = computed(() =>
+  tab.value === "integrations"
+    ? "Connect services to your gateway"
+    : "Manage your account and appearance"
+);
 </script>
 
 <template>
   <div>
-    <PageHeader title="Settings" subtitle="Manage your account and appearance" />
+    <PageHeader title="Settings" :subtitle="subtitle" />
 
+    <!-- Tabs -->
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+      <button
+        v-for="t in tabs"
+        :key="t.id"
+        class="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+        :class="tab === t.id
+          ? 'border-brand-strong bg-brand-tint text-brand-active'
+          : 'border-subtle bg-card text-secondary hover:text-primary'"
+        @click="tab = t.id"
+      >
+        <component :is="t.icon" class="h-3.5 w-3.5" />
+        {{ t.label }}
+      </button>
+    </div>
+
+    <IntegrationsSection v-if="tab === 'integrations'" />
+
+    <template v-else>
     <!-- Account -->
     <section class="mb-6 rounded-lg border border-subtle bg-card p-5 shadow-xs">
       <h3 class="gn-eyebrow mb-4">Account</h3>
@@ -194,9 +231,6 @@ const roleLabel = computed(() => {
         >{{ passphrase.trim() ? "Encryption on" : "Off" }}</span>
       </div>
     </section>
-
-    <!-- Per-user plugin settings, resolved through the server cascade -->
-    <IntegrationsSection />
 
     <!-- Change password -->
     <section class="mb-6 rounded-lg border border-subtle bg-card p-5 shadow-xs">
@@ -275,5 +309,8 @@ const roleLabel = computed(() => {
         </button>
       </div>
     </section>
+    </template>
+    <!-- /General tab. Its sections are left at their original indentation so
+         this stays a structural change rather than a reformat of the file. -->
   </div>
 </template>

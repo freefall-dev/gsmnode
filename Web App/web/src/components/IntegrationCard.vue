@@ -7,18 +7,22 @@ import { api } from "../api";
 // that declares per-user settings shows up as another card with no UI changes.
 //
 // Values resolve through the server-side cascade (global → org → user): a field
-// set by a layer above the user arrives `locked`, with `source` naming who set
-// it, and secrets arrive masked.
+// set by a layer above arrives `locked`, with `source` naming who set it, and
+// secrets arrive masked.
+//
+// An org admin gets two editable layers and a switch between them: their own
+// personal settings, and the organization's — which land locked in every
+// member's form. The server decides who may do that (`canEditOrg`) and returns
+// one entry under `scopes` per layer the caller may edit.
 
 const props = defineProps({
   integration: { type: Object, required: true },
 });
 
-const SECRET_MASK = "••••••••";
-
 const view = ref(props.integration);
 const draft = reactive({});
 const enabled = ref(false);
+const scope = ref("user"); // "user" | "org"
 const busy = ref(false);
 const error = ref("");
 const notice = ref("");
@@ -26,27 +30,58 @@ const health = ref(null);
 
 const spec = computed(() => view.value?.spec || { fields: [] });
 const fields = computed(() => spec.value.fields || []);
-const userScope = computed(() => view.value?.scopes?.user || null);
+const title = computed(() => spec.value.title || view.value?.name);
+const canEditOrg = computed(() => !!view.value?.canEditOrg);
 const canEdit = computed(() => view.value && !view.value.isSuperadmin);
+const editingOrg = computed(() => scope.value === "org");
+
+// The layer currently being edited. Falls back to the user scope, which the
+// server always returns.
+const activeScope = computed(
+  () => view.value?.scopes?.[scope.value] || view.value?.scopes?.user || null
+);
+
+// The org gate is stored inverted server-side; the API hands it back as
+// `orgEnabled`. The personal opt-in is `enabled`.
+function enableFlagFor(v, forScope) {
+  return forScope === "org" ? v.orgEnabled !== false : !!v.enabled;
+}
+
+function seedDraft() {
+  const v = view.value;
+  if (!v) return;
+  enabled.value = enableFlagFor(v, scope.value);
+  const resolved = activeScope.value?.fields || {};
+  for (const f of fields.value) draft[f.key] = resolved[f.key]?.own ?? "";
+}
 
 function seed(v) {
   view.value = v;
-  enabled.value = !!v.enabled;
-  const resolved = v.scopes?.user?.fields || {};
-  for (const f of fields.value) draft[f.key] = resolved[f.key]?.own ?? "";
+  // An org admin who has switched to the org layer stays there across a save.
+  if (scope.value === "org" && !v.scopes?.org) scope.value = "user";
+  seedDraft();
 }
 seed(props.integration);
 watch(() => props.integration, seed);
 
+function selectScope(next) {
+  if (scope.value === next) return;
+  scope.value = next;
+  error.value = "";
+  notice.value = "";
+  health.value = null;
+  seedDraft();
+}
+
 function locked(key) {
-  return userScope.value?.fields?.[key]?.locked ?? false;
+  return activeScope.value?.fields?.[key]?.locked ?? false;
 }
 function sourceOf(key) {
-  return userScope.value?.fields?.[key]?.source ?? "unset";
+  return activeScope.value?.fields?.[key]?.source ?? "unset";
 }
-// A locked field shows what is actually in force, not the user's own blank.
+// A locked field shows what is actually in force, not the editor's own blank.
 function displayValue(key) {
-  return locked(key) ? (userScope.value?.fields?.[key]?.effective ?? "") : draft[key];
+  return locked(key) ? (activeScope.value?.fields?.[key]?.effective ?? "") : draft[key];
 }
 function inputType(f) {
   if (f.type === "password") return "password";
@@ -62,11 +97,11 @@ async function save() {
     const config = {};
     for (const f of fields.value) if (!locked(f.key)) config[f.key] = draft[f.key];
     seed(await api.put(`/integrations/${view.value.name}`, {
-      scope: "user",
+      scope: scope.value,
       enabled: enabled.value,
       config,
     }));
-    notice.value = "Saved.";
+    notice.value = editingOrg.value ? "Saved for your organization." : "Saved.";
   } catch (e) {
     error.value = e.message;
   } finally {
@@ -97,17 +132,27 @@ const healthClass = computed(() => {
       ? "bg-warning-tint text-warning"
       : "bg-danger-tint text-danger";
 });
+
+const scopeTabs = [
+  { value: "user", label: "My settings" },
+  { value: "org", label: "Organization" },
+];
 </script>
 
 <template>
   <section class="mb-6 rounded-lg border border-subtle bg-card p-5 shadow-xs">
-    <h3 class="gn-eyebrow mb-4">{{ spec.title || view.name }}</h3>
+    <h3 class="gn-eyebrow mb-4">{{ title }}</h3>
 
     <p v-if="!view.available" class="rounded-md bg-sunken px-3 py-2 text-sm text-muted">
-      The {{ spec.title || view.name }} integration is turned off by your administrator.
+      The {{ title }} integration is turned off by your administrator.
     </p>
-    <p v-else-if="!view.orgEnabled" class="rounded-md bg-sunken px-3 py-2 text-sm text-muted">
-      The {{ spec.title || view.name }} integration is turned off for your organization.
+    <!-- An org admin must still reach the form when the org gate is off, or
+         nobody could ever switch it back on. -->
+    <p
+      v-else-if="!view.orgEnabled && !canEditOrg"
+      class="rounded-md bg-sunken px-3 py-2 text-sm text-muted"
+    >
+      The {{ title }} integration is turned off for your organization.
     </p>
 
     <template v-else>
@@ -122,9 +167,38 @@ const healthClass = computed(() => {
       </p>
 
       <template v-if="canEdit">
-        <label v-if="spec.enableLabel" class="mb-3 flex items-center gap-2 text-sm text-secondary">
+        <!-- Layer switch: only an org admin has more than one editable layer. -->
+        <div v-if="canEditOrg" class="mb-4 flex flex-wrap gap-2">
+          <button
+            v-for="t in scopeTabs"
+            :key="t.value"
+            class="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+            :class="scope === t.value
+              ? 'border-brand bg-brand-tint text-brand-active'
+              : 'border-strong text-secondary hover:bg-sunken hover:text-primary'"
+            @click="selectScope(t.value)"
+          >{{ t.label }}</button>
+        </div>
+
+        <p
+          v-if="editingOrg"
+          class="mb-3 max-w-prose rounded-md bg-sunken px-3 py-2 text-sm text-muted"
+        >
+          These apply to everyone in your organization. A value you set here is locked
+          for members and overrides what they entered themselves.
+        </p>
+        <p
+          v-else-if="canEditOrg && !view.orgEnabled"
+          class="mb-3 max-w-prose rounded-md bg-warning-tint px-3 py-2 text-sm text-warning"
+        >
+          {{ title }} is turned off for your organization. Switch to
+          <span class="font-medium">Organization</span> to turn it back on.
+        </p>
+
+        <label class="mb-3 flex items-center gap-2 text-sm text-secondary">
           <input type="checkbox" v-model="enabled" class="h-4 w-4" />
-          {{ spec.enableLabel }}
+          <template v-if="editingOrg">Enable {{ title }} for my organization</template>
+          <template v-else>{{ spec.enableLabel }}</template>
         </label>
 
         <div class="grid max-w-xl gap-3 sm:grid-cols-2">
@@ -161,7 +235,9 @@ const healthClass = computed(() => {
         </div>
 
         <div class="mt-4 flex flex-wrap items-center gap-2">
-          <button class="gn-btn-pri" :disabled="busy" @click="save">Save</button>
+          <button class="gn-btn-pri" :disabled="busy" @click="save">
+            {{ editingOrg ? "Save for organization" : "Save" }}
+          </button>
           <button class="gn-btn-sec" :disabled="busy" @click="test">Test connection</button>
           <span
             v-if="health"
@@ -169,9 +245,13 @@ const healthClass = computed(() => {
             :class="healthClass"
           >{{ health.status }}{{ health.detail ? " — " + health.detail : "" }}</span>
         </div>
-      </template>
+        <p v-if="editingOrg" class="mt-1.5 text-xs text-muted">
+          “Test connection” always probes the settings in force for you, not the
+          organization's in isolation.
+        </p>
 
-      <p v-if="notice" class="mt-2 text-sm text-success">{{ notice }}</p>
+        <p v-if="notice" class="mt-2 text-sm text-success">{{ notice }}</p>
+      </template>
     </template>
 
     <p v-if="error" class="mt-2 text-sm text-danger">{{ error }}</p>
