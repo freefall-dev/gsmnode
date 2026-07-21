@@ -8,7 +8,7 @@ import { themePref, setThemePref } from "../theme";
 import PageHeader from "../components/PageHeader.vue";
 import UsersManager from "../components/UsersManager.vue";
 import OrgManager from "../components/OrgManager.vue";
-import EmailToSmsSettings from "../components/EmailToSmsSettings.vue";
+import IntegrationsSection from "../components/IntegrationsSection.vue";
 import { getPassphrase, setPassphrase } from "../crypto";
 
 const router = useRouter();
@@ -195,8 +195,8 @@ const roleLabel = computed(() => {
       </div>
     </section>
 
-    <!-- Email to SMS (per-user mailbox, resolved through the server cascade) -->
-    <EmailToSmsSettings />
+    <!-- Per-user plugin settings, resolved through the server cascade -->
+    <IntegrationsSection />
 
     <!-- Change password -->
     <section class="mb-6 rounded-lg border border-subtle bg-card p-5 shadow-xs">

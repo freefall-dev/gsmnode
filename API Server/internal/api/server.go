@@ -159,9 +159,12 @@ func (s *Server) Handler() http.Handler {
 	// Integrations — per-user plugin settings under the superadmin → org admin →
 	// user cascade (see integrations.go). Any authenticated user manages their
 	// own layer; the global layer is set by a superadmin in the Plugins panel.
-	mux.HandleFunc("GET /api/integrations/email-to-sms", s.requireUser(s.handleGetEmailToSMS))
-	mux.HandleFunc("PUT /api/integrations/email-to-sms", s.requireUser(s.handlePutEmailToSMS))
-	mux.HandleFunc("POST /api/integrations/email-to-sms/health", s.requireUser(s.handleEmailToSMSHealth))
+	// {name} is a plugin that declares per-user settings, so these routes grow
+	// with the plugins rather than with hand-written endpoints.
+	mux.HandleFunc("GET /api/integrations", s.requireUser(s.handleListIntegrations))
+	mux.HandleFunc("GET /api/integrations/{name}", s.requireUser(s.handleGetIntegration))
+	mux.HandleFunc("PUT /api/integrations/{name}", s.requireUser(s.handlePutIntegration))
+	mux.HandleFunc("POST /api/integrations/{name}/health", s.requireUser(s.handleIntegrationHealth))
 
 	mux.HandleFunc("GET /api/devices", s.requireUser(s.handleListDevices))
 	mux.HandleFunc("DELETE /api/devices/{id}", s.requireUser(s.handleDeleteDevice))

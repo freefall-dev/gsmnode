@@ -7,48 +7,45 @@ import (
 	"strings"
 
 	"smsgateway/apiserver/internal/pb"
+	"smsgateway/apiserver/internal/plugins"
 	"smsgateway/apiserver/internal/plugins/builtin/emailtosms"
 )
 
-// This file exposes the email-to-sms plugin to end users under a three-layer
-// cascade, so everyone can poll their own IMAP mailbox while a superadmin (and,
-// in an organization, an org admin) can impose settings from above.
+// This file exposes plugins that offer per-user settings to end users, under a
+// three-layer cascade, so everyone can supply their own credentials while a
+// superadmin (and, in an organization, an org admin) can impose settings from
+// above.
+//
+// Which fields exist is not known here: each plugin declares them
+// (plugins.UserConfigSpec, see internal/plugins/userconfig.go) and everything
+// below — resolution, masking, persistence, and the form the Web App renders —
+// is driven by that declaration.
 //
 // Resolution is a cascade: the top layer wins, and a lower layer only fills a
 // field the layers above left blank.
 //
 //   - global (L1): the plugin's config in plugins.json, set in the Plugins panel
-//     by a superadmin. Supplies optional defaults (imap_default_host/port, mailbox)
-//     and the master on/off switch (the plugin being enabled).
-//   - org    (L2): pluginSettings["email-to-sms"] on the caller's organization.
-//   - user   (L3): pluginSettings["email-to-sms"] on the caller's own user record.
+//     by a superadmin, read through each field's GlobalKey. Also the master
+//     on/off switch (the plugin being enabled).
+//   - org    (L2): pluginSettings[<plugin>] on the caller's organization.
+//   - user   (L3): pluginSettings[<plugin>] on the caller's own user record.
 //
-// The IMAP username + password resolve together as a *pair* from the highest
-// layer that supplies a username, so credential halves are never mixed. Host,
-// port and mailbox resolve on their own. Enablement is per-user (L3), gated by
-// the global master switch and, for org users, by the org gate.
+// Fields sharing a Group resolve together as a unit from the highest layer that
+// sets the group's first field, so the halves of a credential are never mixed.
+// Enablement is per-user (L3), gated by the global master switch and, for org
+// users, by the org gate.
 //
-// Secrets and inherited usernames are never returned in clear to a lower-
+// Secrets and inherited private values are never returned in clear to a lower-
 // privileged client; the effective config is resolved server-side and only
 // masked values leave the API.
 
-const (
-	emailToSMSPlugin = emailtosms.Name
-	e2sSecretMask    = "••••••••"
-)
+const integrationMask = "••••••••"
 
-// e2sConfig is one layer's email-to-sms IMAP settings.
-type e2sConfig struct {
-	Host     string `json:"imap_host"`
-	Port     string `json:"imap_port"`
-	User     string `json:"imap_user"`
-	Password string `json:"imap_password"`
-	Mailbox  string `json:"imap_mailbox"`
-}
-
-// e2sStored is what we persist per user/org under pluginSettings["email-to-sms"].
-type e2sStored struct {
-	Config e2sConfig `json:"config"`
+// integrationStored is what we persist per user/org under
+// pluginSettings[<plugin>]. The shape predates the generic cascade and is
+// unchanged, so existing records keep resolving.
+type integrationStored struct {
+	Config map[string]string `json:"config"`
 	// Enabled is the personal per-user opt-in (user layer). Default false.
 	Enabled bool `json:"enabled"`
 	// Disabled is the organization layer's off switch, stored inverted so absent
@@ -56,24 +53,23 @@ type e2sStored struct {
 	Disabled bool `json:"disabled,omitempty"`
 }
 
-type e2sSettingsDoc struct {
-	EmailToSMS e2sStored `json:"email-to-sms"`
-}
-
-// e2sFieldView is one field's resolved state for the UI.
-type e2sFieldView struct {
+// fieldView is one field's resolved state for the UI.
+type fieldView struct {
 	Effective string `json:"effective"`
 	Own       string `json:"own"`
 	Source    string `json:"source"` // global | org | user | unset
 	Locked    bool   `json:"locked"`
 }
 
-// e2sResolution is the fully-resolved email-to-sms state for one caller.
-type e2sResolution struct {
-	eff        e2sConfig
-	userOwn    e2sConfig
-	orgOwn     e2sConfig
-	source     map[string]string
+// integrationResolution is one plugin's fully-resolved state for one caller.
+type integrationResolution struct {
+	name    string
+	spec    plugins.UserConfigSpec
+	eff     map[string]string
+	userOwn map[string]string
+	orgOwn  map[string]string
+	source  map[string]string
+
 	isSuper    bool
 	canOrg     bool
 	available  bool
@@ -81,32 +77,43 @@ type e2sResolution struct {
 	enabled    bool
 }
 
-var e2sLayerRank = map[string]int{"global": 1, "org": 2, "user": 3}
+var layerRank = map[string]int{"global": 1, "org": 2, "user": 3}
 
-// resolveE2S computes the cascade for a caller. userRaw is the caller's
-// pluginSettings blob (from their user record).
-func (s *Server) resolveE2S(ctx context.Context, who *callerIdentity, userRaw json.RawMessage) e2sResolution {
-	g, masterEnabled, _ := s.plugins.RawConfig(emailToSMSPlugin)
-	gc := e2sConfig{Host: g["imap_default_host"], Port: g["imap_default_port"], Mailbox: g["imap_mailbox"]}
+// globalLayer projects a plugin's global config onto the per-user field keys,
+// honouring each field's GlobalKey (and skipping fields with no global layer).
+func globalLayer(spec plugins.UserConfigSpec, g map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, f := range spec.Fields {
+		if f.GlobalKey == plugins.NoGlobalKey {
+			continue
+		}
+		key := f.GlobalKey
+		if key == "" {
+			key = f.Key
+		}
+		out[f.Key] = g[key]
+	}
+	return out
+}
 
-	var oStored e2sStored
+// resolveIntegration computes the cascade for one caller and one plugin. userRaw
+// is the caller's pluginSettings blob (from their user record).
+func (s *Server) resolveIntegration(ctx context.Context, who *callerIdentity, name string, spec plugins.UserConfigSpec, userRaw json.RawMessage) integrationResolution {
+	g, masterEnabled, _ := s.plugins.RawConfig(name)
+
+	var oStored integrationStored
 	if who.OrgID != "" {
-		oStored, _ = s.orgE2S(ctx, who.OrgID)
+		oStored, _ = s.orgIntegration(ctx, who.OrgID, name)
 	}
-	oc := oStored.Config
+	uStored := decodeIntegration(userRaw, name)
 
-	var uStored e2sStored
-	if len(userRaw) > 0 {
-		var d e2sSettingsDoc
-		_ = json.Unmarshal(userRaw, &d)
-		uStored = d.EmailToSMS
-	}
-	uc := uStored.Config
-
-	res := e2sResolution{
+	res := integrationResolution{
+		name:    name,
+		spec:    spec,
+		eff:     map[string]string{},
 		source:  map[string]string{},
-		userOwn: uc,
-		orgOwn:  oc,
+		userOwn: nonNil(uStored.Config),
+		orgOwn:  nonNil(oStored.Config),
 		isSuper: who.isSuperadmin(),
 		// An org admin may edit the organization layer. Requires the service
 		// account (org writes go through it).
@@ -116,81 +123,126 @@ func (s *Server) resolveE2S(ctx context.Context, who *callerIdentity, userRaw js
 		enabled:    uStored.Enabled,
 	}
 
+	res.eff, res.source = resolveLayers(spec, globalLayer(spec, g), res.orgOwn, res.userOwn, who.OrgID != "")
+	return res
+}
+
+// resolveLayers is the cascade itself: given one layer's values each, it returns
+// the effective value and the winning layer name per field. An org-less caller
+// has no org layer at all (hasOrg false), so nothing can be imposed on them
+// through one.
+//
+// Ungrouped fields resolve independently — the highest layer that sets one wins.
+// Grouped fields resolve as a unit, keyed by the group's first field in spec
+// order, so a password can never be paired with another layer's username.
+func resolveLayers(spec plugins.UserConfigSpec, gc, oc, uc map[string]string, hasOrg bool) (eff, source map[string]string) {
 	type layer struct {
 		name string
-		c    e2sConfig
+		c    map[string]string
 	}
 	layers := []layer{{"global", gc}}
-	if who.OrgID != "" {
+	if hasOrg {
 		layers = append(layers, layer{"org", oc})
 	}
 	layers = append(layers, layer{"user", uc})
 
-	// Host, port and mailbox resolve independently: the highest layer that sets
-	// them wins.
-	pickIndependent := func(key string, get func(e2sConfig) string, set func(*e2sConfig, string)) {
-		res.source[key] = "unset"
+	eff, source = map[string]string{}, map[string]string{}
+
+	groupLead := map[string]string{} // group → first field key in spec order
+	for _, f := range spec.Fields {
+		if f.Group != "" {
+			if _, seen := groupLead[f.Group]; !seen {
+				groupLead[f.Group] = f.Key
+			}
+		}
+	}
+	groupSource := map[string]string{} // group → winning layer name
+	groupValues := map[string]map[string]string{}
+	for group, lead := range groupLead {
+		groupSource[group] = "unset"
 		for _, l := range layers {
-			if v := strings.TrimSpace(get(l.c)); v != "" {
-				set(&res.eff, v)
-				res.source[key] = l.name
+			if strings.TrimSpace(l.c[lead]) != "" {
+				groupSource[group], groupValues[group] = l.name, l.c
 				break
 			}
 		}
 	}
-	pickIndependent("imap_host", func(c e2sConfig) string { return c.Host }, func(c *e2sConfig, v string) { c.Host = v })
-	pickIndependent("imap_port", func(c e2sConfig) string { return c.Port }, func(c *e2sConfig, v string) { c.Port = v })
-	pickIndependent("imap_mailbox", func(c e2sConfig) string { return c.Mailbox }, func(c *e2sConfig, v string) { c.Mailbox = v })
 
-	// Credentials resolve as a pair from the highest layer with a username.
-	credSrc := "unset"
-	for _, l := range layers {
-		if u := strings.TrimSpace(l.c.User); u != "" {
-			res.eff.User, res.eff.Password, credSrc = u, l.c.Password, l.name
-			break
+	for _, f := range spec.Fields {
+		if f.Group != "" {
+			source[f.Key] = groupSource[f.Group]
+			if vals := groupValues[f.Group]; vals != nil {
+				eff[f.Key] = vals[f.Key]
+			}
+			continue
+		}
+		source[f.Key] = "unset"
+		for _, l := range layers {
+			if v := strings.TrimSpace(l.c[f.Key]); v != "" {
+				eff[f.Key] = v
+				source[f.Key] = l.name
+				break
+			}
 		}
 	}
-	res.source["imap_user"] = credSrc
-	res.source["imap_password"] = credSrc
-	return res
+	return eff, source
 }
 
-// e2sLockedFor reports whether a field from source is locked for a caller whose
+// lockedFor reports whether a field from source is locked for a caller whose
 // editable layer is editable (i.e. the value is set above them).
-func e2sLockedFor(source, editable string) bool {
+func lockedFor(source, editable string) bool {
 	if editable == "none" {
 		return true // superadmin edits the global layer in the panel, not here
 	}
-	sr, ok := e2sLayerRank[source]
+	sr, ok := layerRank[source]
 	if !ok {
 		return false // unset — the caller may be the first to set it
 	}
-	return sr < e2sLayerRank[editable]
+	return sr < layerRank[editable]
 }
 
-func e2sMaskPresent(v string) string {
+func maskPresent(v string) string {
 	if strings.TrimSpace(v) != "" {
-		return e2sSecretMask
+		return integrationMask
 	}
 	return ""
 }
 
-// orgE2S reads an organization's stored email-to-sms settings and raw blob via
-// the service account. Best effort: zero values on any miss.
-func (s *Server) orgE2S(ctx context.Context, orgID string) (e2sStored, json.RawMessage) {
+func nonNil(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
+}
+
+// decodeIntegration pulls one plugin's stored settings out of a pluginSettings blob.
+func decodeIntegration(raw json.RawMessage, name string) integrationStored {
+	var st integrationStored
+	if len(raw) == 0 {
+		return st
+	}
+	doc := map[string]json.RawMessage{}
+	if json.Unmarshal(raw, &doc) != nil {
+		return st
+	}
+	if entry, ok := doc[name]; ok {
+		_ = json.Unmarshal(entry, &st)
+	}
+	return st
+}
+
+// orgIntegration reads an organization's stored settings for one plugin, and the
+// org's raw blob, via the service account. Best effort: zero values on any miss.
+func (s *Server) orgIntegration(ctx context.Context, orgID, name string) (integrationStored, json.RawMessage) {
 	if orgID == "" || !s.pb.Configured() {
-		return e2sStored{}, nil
+		return integrationStored{}, nil
 	}
 	rec, err := s.pb.GetOne(ctx, colOrgs, orgID)
 	if err != nil {
-		return e2sStored{}, nil
+		return integrationStored{}, nil
 	}
 	raw := rawJSON(rec["pluginSettings"])
-	var doc e2sSettingsDoc
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &doc)
-	}
-	return doc.EmailToSMS, raw
+	return decodeIntegration(raw, name), raw
 }
 
 // userPluginSettings reads a user's raw pluginSettings blob. Best effort: nil on miss.
@@ -224,9 +276,9 @@ func rawJSON(v any) json.RawMessage {
 	return b
 }
 
-// mergeE2S applies a mutation to the email-to-sms entry of a pluginSettings blob,
-// preserving any other plugin keys, and returns the new blob.
-func mergeE2S(existing json.RawMessage, apply func(*e2sStored)) json.RawMessage {
+// mergeIntegration applies a mutation to one plugin's entry in a pluginSettings
+// blob, preserving every other plugin's key, and returns the new blob.
+func mergeIntegration(existing json.RawMessage, name string, apply func(*integrationStored)) json.RawMessage {
 	doc := map[string]json.RawMessage{}
 	if len(existing) > 0 {
 		_ = json.Unmarshal(existing, &doc)
@@ -234,52 +286,46 @@ func mergeE2S(existing json.RawMessage, apply func(*e2sStored)) json.RawMessage 
 	if doc == nil {
 		doc = map[string]json.RawMessage{}
 	}
-	var st e2sStored
-	if raw, ok := doc[emailToSMSPlugin]; ok {
+	var st integrationStored
+	if raw, ok := doc[name]; ok {
 		_ = json.Unmarshal(raw, &st)
 	}
 	apply(&st)
 	b, _ := json.Marshal(st)
-	doc[emailToSMSPlugin] = b
+	doc[name] = b
 	out, _ := json.Marshal(doc)
 	return out
 }
 
-// e2sScopeView builds the masked field set for one editable scope.
-func (s *Server) e2sScopeView(res e2sResolution, editable string) map[string]any {
+// scopeView builds the masked field set for one editable scope.
+func scopeView(res integrationResolution, editable string) map[string]any {
 	own := res.userOwn
 	if editable == "org" {
 		own = res.orgOwn
 	}
-	field := func(key, eff, ownv string, secret bool) e2sFieldView {
-		src := res.source[key]
-		locked := e2sLockedFor(src, editable)
-		fv := e2sFieldView{Source: src, Locked: locked}
+	fields := map[string]fieldView{}
+	for _, f := range res.spec.Fields {
+		src := res.source[f.Key]
+		locked := lockedFor(src, editable)
+		fv := fieldView{Source: src, Locked: locked}
 		switch {
-		case secret:
-			fv.Effective, fv.Own = e2sMaskPresent(eff), e2sMaskPresent(ownv)
-		case key == "imap_user" && locked:
-			fv.Effective, fv.Own = e2sMaskPresent(eff), e2sMaskPresent(ownv)
+		case f.Secret:
+			fv.Effective, fv.Own = maskPresent(res.eff[f.Key]), maskPresent(own[f.Key])
+		case f.MaskWhenInherited && locked:
+			fv.Effective, fv.Own = maskPresent(res.eff[f.Key]), maskPresent(own[f.Key])
 		default:
-			fv.Effective, fv.Own = eff, ownv
+			fv.Effective, fv.Own = res.eff[f.Key], own[f.Key]
 		}
-		return fv
+		fields[f.Key] = fv
 	}
-	return map[string]any{
-		"editableLayer": editable,
-		"fields": map[string]e2sFieldView{
-			"imap_host":     field("imap_host", res.eff.Host, own.Host, false),
-			"imap_port":     field("imap_port", res.eff.Port, own.Port, false),
-			"imap_user":     field("imap_user", res.eff.User, own.User, false),
-			"imap_password": field("imap_password", res.eff.Password, own.Password, true),
-			"imap_mailbox":  field("imap_mailbox", res.eff.Mailbox, own.Mailbox, false),
-		},
-	}
+	return map[string]any{"editableLayer": editable, "fields": fields}
 }
 
-// e2sView builds the masked, client-safe response body from a resolution.
-func (s *Server) e2sView(who *callerIdentity, res e2sResolution) map[string]any {
+// integrationView builds the masked, client-safe response body from a resolution.
+func integrationView(who *callerIdentity, res integrationResolution) map[string]any {
 	out := map[string]any{
+		"name":         res.name,
+		"spec":         res.spec,
 		"available":    res.available,
 		"orgEnabled":   res.orgEnabled,
 		"enabled":      res.enabled,
@@ -290,35 +336,78 @@ func (s *Server) e2sView(who *callerIdentity, res e2sResolution) map[string]any 
 	}
 	if res.isSuper {
 		out["editableLayer"] = "none"
-		out["scopes"] = map[string]any{"user": s.e2sScopeView(res, "none")}
+		out["scopes"] = map[string]any{"user": scopeView(res, "none")}
 		return out
 	}
-	scopes := map[string]any{"user": s.e2sScopeView(res, "user")}
+	scopes := map[string]any{"user": scopeView(res, "user")}
 	if res.canOrg {
-		scopes["org"] = s.e2sScopeView(res, "org")
+		scopes["org"] = scopeView(res, "org")
 	}
 	out["scopes"] = scopes
 	return out
 }
 
-// GET /api/integrations/email-to-sms — resolved view for the caller.
-func (s *Server) handleGetEmailToSMS(w http.ResponseWriter, r *http.Request) {
+// integrationSpec looks up a plugin's per-user declaration, writing a 404 when
+// the plugin does not offer one.
+func (s *Server) integrationSpec(w http.ResponseWriter, name string) (plugins.UserConfigSpec, bool) {
+	spec, ok := s.plugins.UserSpec(name)
+	if !ok {
+		writeError(w, http.StatusNotFound, "unknown integration")
+		return plugins.UserConfigSpec{}, false
+	}
+	return spec, true
+}
+
+// GET /api/integrations — every integration the caller can configure, each
+// fully resolved, so a client renders its whole settings page from one call.
+func (s *Server) handleListIntegrations(w http.ResponseWriter, r *http.Request) {
 	who := caller(r)
 	if who == nil {
 		writeError(w, http.StatusUnauthorized, "not authenticated")
 		return
 	}
 	userRaw := s.userPluginSettings(r.Context(), who.ID)
-	res := s.resolveE2S(r.Context(), who, userRaw)
-	writeJSON(w, http.StatusOK, s.e2sView(who, res))
+
+	out := []map[string]any{}
+	for _, name := range s.plugins.UserConfigurableNames() {
+		spec, ok := s.plugins.UserSpec(name)
+		if !ok {
+			continue
+		}
+		res := s.resolveIntegration(r.Context(), who, name, spec, userRaw)
+		out = append(out, integrationView(who, res))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"integrations": out})
 }
 
-// PUT /api/integrations/email-to-sms — save the caller's editable layer. Body:
-// {enabled?: bool, scope?: "user"|"org", config?: {imap_*}}.
-func (s *Server) handlePutEmailToSMS(w http.ResponseWriter, r *http.Request) {
+// GET /api/integrations/{name} — resolved view for the caller.
+func (s *Server) handleGetIntegration(w http.ResponseWriter, r *http.Request) {
 	who := caller(r)
 	if who == nil {
 		writeError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+	name := r.PathValue("name")
+	spec, ok := s.integrationSpec(w, name)
+	if !ok {
+		return
+	}
+	userRaw := s.userPluginSettings(r.Context(), who.ID)
+	res := s.resolveIntegration(r.Context(), who, name, spec, userRaw)
+	writeJSON(w, http.StatusOK, integrationView(who, res))
+}
+
+// PUT /api/integrations/{name} — save the caller's editable layer. Body:
+// {enabled?: bool, scope?: "user"|"org", config?: {<field key>: value}}.
+func (s *Server) handlePutIntegration(w http.ResponseWriter, r *http.Request) {
+	who := caller(r)
+	if who == nil {
+		writeError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+	name := r.PathValue("name")
+	spec, ok := s.integrationSpec(w, name)
+	if !ok {
 		return
 	}
 	if !s.pb.Configured() {
@@ -336,7 +425,7 @@ func (s *Server) handlePutEmailToSMS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userRaw := s.userPluginSettings(r.Context(), who.ID)
-	res := s.resolveE2S(r.Context(), who, userRaw)
+	res := s.resolveIntegration(r.Context(), who, name, spec, userRaw)
 
 	editable := "user"
 	switch {
@@ -350,30 +439,31 @@ func (s *Server) handlePutEmailToSMS(w http.ResponseWriter, r *http.Request) {
 		editable = "org"
 	}
 
-	newOwn := res.userOwn
+	newOwn := map[string]string{}
+	for k, v := range res.userOwn {
+		newOwn[k] = v
+	}
 	if editable == "org" {
-		newOwn = res.orgOwn
-	}
-	applyField := func(key string, set func(*e2sConfig, string)) {
-		v, ok := body.Config[key]
-		if !ok || e2sLockedFor(res.source[key], editable) {
-			return
+		newOwn = map[string]string{}
+		for k, v := range res.orgOwn {
+			newOwn[k] = v
 		}
-		if key == "imap_password" && v == e2sSecretMask {
-			return // keep current secret
-		}
-		set(&newOwn, strings.TrimSpace(v))
 	}
-	applyField("imap_host", func(c *e2sConfig, v string) { c.Host = v })
-	applyField("imap_port", func(c *e2sConfig, v string) { c.Port = v })
-	applyField("imap_user", func(c *e2sConfig, v string) { c.User = v })
-	applyField("imap_password", func(c *e2sConfig, v string) { c.Password = v })
-	applyField("imap_mailbox", func(c *e2sConfig, v string) { c.Mailbox = v })
+	for _, f := range spec.Fields {
+		v, sent := body.Config[f.Key]
+		if !sent || lockedFor(res.source[f.Key], editable) {
+			continue
+		}
+		if f.Secret && v == integrationMask {
+			continue // keep current secret
+		}
+		newOwn[f.Key] = strings.TrimSpace(v)
+	}
 
 	// Persist the organization layer (admins) via the service account.
 	if editable == "org" {
-		_, orgRaw := s.orgE2S(r.Context(), who.OrgID)
-		newDoc := mergeE2S(orgRaw, func(st *e2sStored) {
+		_, orgRaw := s.orgIntegration(r.Context(), who.OrgID, name)
+		newDoc := mergeIntegration(orgRaw, name, func(st *integrationStored) {
 			st.Config = newOwn
 			if body.Enabled != nil {
 				st.Disabled = !*body.Enabled // org master switch, stored inverted
@@ -389,7 +479,7 @@ func (s *Server) handlePutEmailToSMS(w http.ResponseWriter, r *http.Request) {
 	// Persist the user record: personal enable flag (user scope) + personal config.
 	personalEnable := body.Enabled != nil && editable != "org"
 	if personalEnable || editable == "user" {
-		newDoc := mergeE2S(userRaw, func(st *e2sStored) {
+		newDoc := mergeIntegration(userRaw, name, func(st *integrationStored) {
 			if personalEnable {
 				st.Enabled = *body.Enabled
 			}
@@ -405,61 +495,57 @@ func (s *Server) handlePutEmailToSMS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fresh := s.userPluginSettings(r.Context(), who.ID)
-	res2 := s.resolveE2S(r.Context(), who, fresh)
-	writeJSON(w, http.StatusOK, s.e2sView(who, res2))
+	res2 := s.resolveIntegration(r.Context(), who, name, spec, fresh)
+	writeJSON(w, http.StatusOK, integrationView(who, res2))
 }
 
-// POST /api/integrations/email-to-sms/health — probe the caller's resolved IMAP
-// mailbox. Never returns secrets.
-func (s *Server) handleEmailToSMSHealth(w http.ResponseWriter, r *http.Request) {
+// POST /api/integrations/{name}/health — probe the caller's resolved settings
+// against the plugin. Never returns secrets.
+func (s *Server) handleIntegrationHealth(w http.ResponseWriter, r *http.Request) {
 	who := caller(r)
 	if who == nil {
 		writeError(w, http.StatusUnauthorized, "not authenticated")
 		return
 	}
+	name := r.PathValue("name")
+	spec, ok := s.integrationSpec(w, name)
+	if !ok {
+		return
+	}
 	userRaw := s.userPluginSettings(r.Context(), who.ID)
-	res := s.resolveE2S(r.Context(), who, userRaw)
+	res := s.resolveIntegration(r.Context(), who, name, spec, userRaw)
 
 	down := func(detail string) {
 		writeJSON(w, http.StatusOK, map[string]any{"health": map[string]any{"status": "down", "detail": detail}})
 	}
 	switch {
 	case !res.available:
-		down("The email-to-sms integration is disabled by the administrator")
+		down("The " + name + " integration is disabled by the administrator")
 		return
 	case !res.orgEnabled:
-		down("The email-to-sms integration is disabled for your organization")
-		return
-	case strings.TrimSpace(res.eff.Host) == "" || strings.TrimSpace(res.eff.User) == "" || strings.TrimSpace(res.eff.Password) == "":
-		down("Enter your IMAP host, username and password to connect")
+		down("The " + name + " integration is disabled for your organization")
 		return
 	}
 
-	h := emailtosms.ProbeMailbox(r.Context(), emailtosms.IMAPTarget{
-		OwnerID:  who.ID,
-		Host:     res.eff.Host,
-		Port:     portOr(res.eff.Port, 993),
-		Username: res.eff.User,
-		Password: res.eff.Password,
-		Mailbox:  res.eff.Mailbox,
-	})
+	h, err := s.plugins.UserHealthCheckWith(r.Context(), name,
+		plugins.UserContext{OwnerID: who.ID, Role: who.Role, OrgID: who.OrgID}, res.eff)
+	if err != nil {
+		down(err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"health": h})
-}
-
-// portOr parses a port string, falling back to def for empty/invalid input.
-func portOr(s string, def int) int {
-	if n := asInt(s); n > 0 {
-		return n
-	}
-	return def
 }
 
 // emailToSMSIMAPTargets resolves every user's mailbox to poll in IMAP mode. It is
 // called by the plugin host adapter (plugin_host.go). Returns nil when the plugin
 // is disabled globally.
 func (s *Server) emailToSMSIMAPTargets(ctx context.Context) ([]emailtosms.IMAPTarget, error) {
-	_, masterEnabled, ok := s.plugins.RawConfig(emailToSMSPlugin)
+	_, masterEnabled, ok := s.plugins.RawConfig(emailtosms.Name)
 	if !ok || !masterEnabled || !s.pb.Configured() {
+		return nil, nil
+	}
+	spec, ok := s.plugins.UserSpec(emailtosms.Name)
+	if !ok {
 		return nil, nil
 	}
 	res, err := s.pb.List(ctx, colUsers, pb.ListOptions{PerPage: 500})
@@ -473,22 +559,15 @@ func (s *Server) emailToSMSIMAPTargets(ctx context.Context) ([]emailtosms.IMAPTa
 			Role:  asString(rec["role"]),
 			OrgID: asString(rec["organization"]),
 		}
-		userRaw := rawJSON(rec["pluginSettings"])
-		r := s.resolveE2S(ctx, who, userRaw)
+		r := s.resolveIntegration(ctx, who, emailtosms.Name, spec, rawJSON(rec["pluginSettings"]))
 		if !r.enabled || !r.orgEnabled {
 			continue
 		}
-		if strings.TrimSpace(r.eff.Host) == "" || strings.TrimSpace(r.eff.User) == "" || strings.TrimSpace(r.eff.Password) == "" {
+		t := emailtosms.IMAPTargetFrom(who.ID, r.eff)
+		if t.Host == "" || t.Username == "" || t.Password == "" {
 			continue
 		}
-		out = append(out, emailtosms.IMAPTarget{
-			OwnerID:  who.ID,
-			Host:     r.eff.Host,
-			Port:     portOr(r.eff.Port, 993),
-			Username: r.eff.User,
-			Password: r.eff.Password,
-			Mailbox:  r.eff.Mailbox,
-		})
+		out = append(out, t)
 	}
 	return out, nil
 }

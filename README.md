@@ -93,8 +93,13 @@ The first built-in is **Email-to-SMS** (modelled on
 - **SMTP** — the plugin runs an SMTP server; the sender authenticates (AUTH PLAIN)
   with their gsmnode login and the SMS is owned by that user.
 - **IMAP** — the plugin polls each user's own mailbox. Users connect their mailbox
-  in the Web App (**Settings → Email to SMS**), resolved through a
+  in the Web App (**Settings → Integrations**), resolved through a
   global → org → user cascade (`/api/integrations/email-to-sms`).
+
+Per-user settings are generic: a plugin declares the fields it accepts
+(`UserConfigurable`, or a `userConfig` block in an external plugin's manifest)
+and the cascade, the `/api/integrations*` endpoints and the Web App form are all
+derived from that declaration — no per-plugin API or UI code.
 
 ## End-to-end encryption
 
