@@ -13,14 +13,16 @@
       "runtimeExecutable": "./api-server.exe",
       "runtimeArgs": [],
       "cwd": "API Server",
-      "port": 8080
+      "port": 8080,
+      "autoPort": false
     },
     {
       "name": "web-app-bff",
       "runtimeExecutable": "./web-app.exe",
       "runtimeArgs": [],
       "cwd": "Web App/server",
-      "port": 8090
+      "port": 8090,
+      "autoPort": false
     },
     {
       "name": "api-panel",
