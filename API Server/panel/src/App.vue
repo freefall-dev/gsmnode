@@ -5,6 +5,7 @@ import { theme, toggleTheme } from "./theme";
 import { me, token, restore, logout, isManager, isSuperadmin } from "./api";
 import LoginView from "./components/LoginView.vue";
 import StatusCard from "./components/StatusCard.vue";
+import DevicesCard from "./components/DevicesCard.vue";
 import UsersCard from "./components/UsersCard.vue";
 import OrgsCard from "./components/OrgsCard.vue";
 import PocketBaseCard from "./components/PocketBaseCard.vue";
@@ -61,6 +62,7 @@ const authApi = [
 
 const clientApi = [
   { method: "GET", path: "/api/devices", desc: "List registered gateway devices" },
+  { method: "GET", path: "/api/devices?scope=all", desc: "Widen to every device your role may see" },
   { method: "DELETE", path: "/api/devices/{id}", desc: "Remove a device" },
   { method: "POST", path: "/api/messages", desc: "Queue an outbound SMS" },
   { method: "GET", path: "/api/messages", desc: "Outbound message history" },
@@ -160,7 +162,10 @@ const mobileApi = [
         </button>
       </nav>
 
-      <StatusCard v-if="section === 'overview'" />
+      <template v-if="section === 'overview'">
+        <StatusCard />
+        <DevicesCard />
+      </template>
       <UsersCard v-else-if="section === 'users'" />
       <OrgsCard v-else-if="section === 'orgs'" />
       <PocketBaseCard v-else-if="section === 'pocketbase'" />

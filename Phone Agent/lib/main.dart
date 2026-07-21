@@ -31,7 +31,7 @@ class GsmNodeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'gsmnode',
+      title: 'gsmnode agent',
       debugShowCheckedModeBanner: false,
       theme: gsmnodeLightTheme(),
       darkTheme: gsmnodeDarkTheme(),

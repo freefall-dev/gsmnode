@@ -52,7 +52,7 @@ class GatewayForegroundService : Service() {
 
     private fun startForegroundCompat() {
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("gsmnode")
+            .setContentTitle("gsmnode agent")
             .setContentText("Gateway is running")
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setOngoing(true)
@@ -81,7 +81,7 @@ class GatewayForegroundService : Service() {
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID, "gsmnode",
+                CHANNEL_ID, "gsmnode agent",
                 NotificationManager.IMPORTANCE_LOW
             ).apply { description = "Keeps the SMS gateway running" }
             getSystemService(NotificationManager::class.java)

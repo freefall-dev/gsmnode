@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -18,6 +19,11 @@ type deviceDTO struct {
 	Status     string    `json:"status"`
 	LastSeenAt string    `json:"last_seen_at"`
 	Sims       []simInfo `json:"sims"`
+
+	// Owner identity, filled in only for the widened (scope=all) listing — in
+	// the default "my devices" view the caller already knows whose they are.
+	OwnerEmail string `json:"owner_email,omitempty"`
+	OwnerName  string `json:"owner_name,omitempty"`
 }
 
 // simInfo describes one SIM active in a device, as reported by the phone.
@@ -93,11 +99,65 @@ func deviceOnline(lastSeenAt string) bool {
 	return false
 }
 
-// handleListDevices returns the authenticated user's devices.
+// deviceOwner is the slice of a user the widened device list reports.
+type deviceOwner struct {
+	Email string
+	Name  string
+}
+
+// deviceScope resolves the PocketBase owner filter for a device listing, plus
+// the owner lookup used to label rows. Widening is capped by role: a superadmin
+// watches every registered device, an admin their own organization's, and
+// anyone else only their own — so an untrusted ?scope=all cannot leak devices.
+// An empty filter means "no owner restriction".
+func (s *Server) deviceScope(ctx context.Context, who *callerIdentity, widen bool) (string, map[string]deviceOwner, error) {
+	mine := "owner = " + pbQuote(who.ID)
+	if !widen || !who.isManager() {
+		return mine, nil, nil
+	}
+
+	opt := pb.ListOptions{Sort: "email", PerPage: 500}
+	if !who.isSuperadmin() {
+		// Admin: scoped to their organization. An org-less admin manages nobody,
+		// so the widened view collapses back to their own devices.
+		if who.OrgID == "" {
+			return mine, nil, nil
+		}
+		opt.Filter = "organization = " + pbQuote(who.OrgID)
+	}
+	res, err := s.pb.List(ctx, colUsers, opt)
+	if err != nil {
+		return "", nil, err
+	}
+
+	owners := make(map[string]deviceOwner, len(res.Items))
+	ids := make([]string, 0, len(res.Items))
+	for _, rec := range res.Items {
+		id := asString(rec["id"])
+		owners[id] = deviceOwner{Email: asString(rec["email"]), Name: asString(rec["name"])}
+		ids = append(ids, "owner = "+pbQuote(id))
+	}
+	if who.isSuperadmin() {
+		return "", owners, nil // every device, whoever owns it
+	}
+	if len(ids) == 0 {
+		return mine, owners, nil
+	}
+	return "(" + strings.Join(ids, " || ") + ")", owners, nil
+}
+
+// handleListDevices returns the caller's devices. ?scope=all widens the list as
+// far as the caller's role allows (see deviceScope) — the panel's Overview uses
+// it to watch every connected device; the Web App asks for the default view.
 func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
-	uid, _ := userFromCtx(r.Context())
+	who := caller(r)
+	filter, owners, err := s.deviceScope(r.Context(), who, r.URL.Query().Get("scope") == "all")
+	if err != nil {
+		writeUpstreamError(w, err)
+		return
+	}
 	res, err := s.pb.List(r.Context(), colDevices, pb.ListOptions{
-		Filter:  "owner = " + pbQuote(uid),
+		Filter:  filter,
 		Sort:    "-created",
 		PerPage: 200,
 	})
@@ -107,7 +167,11 @@ func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]deviceDTO, 0, len(res.Items))
 	for _, rec := range res.Items {
-		out = append(out, recordToDevice(rec))
+		d := recordToDevice(rec)
+		if o, ok := owners[asString(rec["owner"])]; ok {
+			d.OwnerEmail, d.OwnerName = o.Email, o.Name
+		}
+		out = append(out, d)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out, "total": res.TotalItems})
 }
