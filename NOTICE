@@ -1,0 +1,18 @@
+gsmnode
+Copyright 2026 FreeFallDev
+
+This product includes software developed by the gsmnode project
+(https://github.com/freefall-dev/gsmnode-ha).
+
+TRADEMARKS
+
+The "gsmnode" name, the lowercase gsmnode wordmark, and the two-arrow routing
+mark are marks of the gsmnode project. Section 6 of the License does not grant
+permission to use them.
+
+This applies to the brand image files distributed inside the source tree —
+including those under
+`Home Assistant Plugin/custom_components/gsmnode/brand/` — which are licensed
+for redistribution as part of gsmnode itself, not as a grant to apply the marks
+to a fork or to any other product. Forks are welcome; forks carrying this name
+and mark are not.

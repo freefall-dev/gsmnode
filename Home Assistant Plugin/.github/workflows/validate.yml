@@ -1,0 +1,43 @@
+# The two checks HACS requires before a repository can join the default store,
+# plus the plugin's own unit tests. Both actions must pass with no errors and no
+# ignores — a single ignore is enough for the hacs/default PR to be turned down.
+name: Validate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  # HACS and Home Assistant both move; a weekly run says so before a user does.
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+jobs:
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: integration
+
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # sims.py and the signature scheme are deliberately free of Home
+      # Assistant imports, so this needs nothing installed.
+      - run: python -m unittest discover tests

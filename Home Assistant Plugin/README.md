@@ -39,16 +39,35 @@ Assistant UI, and nothing goes in `configuration.yaml`.
 
 ## Install
 
-1. Copy the integration folder into your Home Assistant config directory so it
-   lands at:
+Needs Home Assistant **2025.3** or newer — notification targets are config
+subentries, which older versions cannot show.
+
+### With HACS
+
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=freefall-dev&repository=gsmnode-ha&category=integration)
+
+Until it lands in the HACS default store, add it as a custom repository:
+
+1. **HACS → ⋮ (top right) → Custom repositories**.
+2. Repository `https://github.com/freefall-dev/gsmnode-ha`, type **Integration**
+   → **Add**.
+3. Search HACS for **gsmnode** → **Download**.
+4. **Restart Home Assistant** (Settings → System → Restart).
+
+The button above does steps 1–3 for you. Once the integration is in the default
+store, none of this is needed — it will simply be there to search for.
+
+### By hand
+
+1. Copy `custom_components/gsmnode/` from this repository into your Home
+   Assistant config directory, so it lands at:
 
    ```
    <config>/custom_components/gsmnode/
    ```
 
-   (Copy this repo's `custom_components/gsmnode/` next to your
-   `configuration.yaml`. Use the Samba / File editor / SSH add-on, or the
-   mapped volume for Docker.)
+   That is next to your `configuration.yaml`. Use the Samba / File editor / SSH
+   add-on, or the mapped volume for Docker.
 
 2. **Restart Home Assistant** (Settings → System → Restart).
 
@@ -57,9 +76,10 @@ Assistant UI, and nothing goes in `configuration.yaml`.
 1. **Settings → Devices & Services → Add Integration**.
 2. Search for **gsmnode**.
 3. Fill in the form:
-   - **API Server URL** — e.g. `http://10.2.1.10:8080` (must be reachable from HA)
-   - **Email** / **Password** — a gateway user (create one with
-     `node "API Server/scripts/create-user.mjs" ha@local "pass" "Home Assistant"`)
+   - **API Server URL** — e.g. `http://192.0.2.10:8080` (must be reachable from HA)
+   - **Email** / **Password** — a gateway user. Make one in the Web App, or on
+     the API Server host with
+     `node scripts/create-user.mjs ha@local "pass" "Home Assistant"`
    - **Default phone** *(optional)* — pin sends/calls to a specific phone, by its
      device ID
 
@@ -419,3 +439,23 @@ have to be upscaled to reach the hDPI range.
   them fine — but the API Server can read them, unlike ones composed in the Web
   App. Incoming SMS relayed to a HA webhook likewise arrive as ciphertext if the
   Phone Agent encrypted them.
+
+## Where this comes from
+
+The integration is one surface of **gsmnode**, which also has an API Server, a
+Web App, and two Android apps — a Phone Agent that does the sending and a Phone
+App that manages the gateway. Those live in the project's own repository; this
+one holds the Home Assistant integration alone, because HACS requires
+`custom_components/<domain>/` at the root of the repository it installs from.
+
+It is published by splitting that folder out, so the history here is the real
+history of the integration and not a squash. Issues and pull requests are
+welcome here; changes are merged upstream and land back on the next release.
+
+## License
+
+[Apache License 2.0](LICENSE).
+
+The gsmnode name and marks are excluded from that grant — see [NOTICE](NOTICE)
+and section 6 of the License. Fork it freely; just don't ship the fork under
+this name and logo.
