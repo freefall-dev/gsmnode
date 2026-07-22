@@ -1,7 +1,7 @@
 // Sets up the PocketBase collections the API Server expects.
 //
 // Usage (PowerShell):
-//   $env:POCKETBASE_URL="http://10.2.1.10:8028"
+//   $env:POCKETBASE_URL="http://localhost:8028"
 //   $env:PB_ADMIN_EMAIL="you@example.com"
 //   $env:PB_ADMIN_PASSWORD="your-password"
 //   node scripts/setup-pocketbase.mjs
@@ -9,7 +9,7 @@
 // It is idempotent: existing collections are updated, missing ones created.
 // Requires Node 18+ (uses global fetch). No npm install needed.
 
-const BASE = (process.env.POCKETBASE_URL || "http://10.2.1.10:8028").replace(/\/$/, "");
+const BASE = (process.env.POCKETBASE_URL || "http://localhost:8028").replace(/\/$/, "");
 const EMAIL = process.env.PB_ADMIN_EMAIL;
 const PASSWORD = process.env.PB_ADMIN_PASSWORD;
 

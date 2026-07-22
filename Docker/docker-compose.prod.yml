@@ -1,9 +1,11 @@
 name: gsmnode
 
-# Production gsmnode stack — pulls prebuilt images from the registry instead of
+# Production gsmnode stack — pulls prebuilt images from a registry instead of
 # building from source. Everything an operator needs to set lives in .env.
+# There is no public registry for these images yet, so PB_IMAGE / API_IMAGE /
+# WEB_IMAGE must name your own — build and push them with docker-compose.yml.
 #
-#   1. cp .env.prod.example .env   (then edit it — all secrets/ports/volumes)
+#   1. cp .env.prod.example .env   (then edit it — images/secrets/ports/volumes)
 #   2. docker compose -f docker-compose.prod.yml pull
 #   3. docker compose -f docker-compose.prod.yml up -d
 #
@@ -16,7 +18,7 @@ name: gsmnode
 
 services:
   pocketbase:
-    image: "${PB_IMAGE:-10.2.1.10:5500/admin/gsmnode-pocketbase:latest}"
+    image: "${PB_IMAGE:?set PB_IMAGE in .env}"
     container_name: gsmnode-pocketbase
     restart: unless-stopped
     environment:
@@ -40,7 +42,7 @@ services:
       start_period: 10s
 
   api-server:
-    image: "${API_IMAGE:-10.2.1.10:5500/admin/gsmnode-api-server:latest}"
+    image: "${API_IMAGE:?set API_IMAGE in .env}"
     container_name: gsmnode-api
     restart: unless-stopped
     depends_on:
@@ -80,7 +82,7 @@ services:
       - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
 
   web-app:
-    image: "${WEB_IMAGE:-10.2.1.10:5500/admin/gsmnode-web-app:latest}"
+    image: "${WEB_IMAGE:?set WEB_IMAGE in .env}"
     container_name: gsmnode-web
     restart: unless-stopped
     depends_on:

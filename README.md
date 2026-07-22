@@ -3,11 +3,12 @@
 Turn Android phones into a programmable SMS gateway, controlled through a web UI
 and a REST API — inspired by [android-sms-gateway](https://docs.sms-gate.app/).
 
-Brand + design system live in
-[`Design/SMS Gateway logo design/`](Design/SMS%20Gateway%20logo%20design/) —
-signal-green `#2E9E6B` on ink, Space Grotesk (display) · IBM Plex Sans (body) ·
-JetBrains Mono (code/labels), the lowercase `gsm`+`node` wordmark, and the
-two-arrow routing mark. Every UI surface implements it (the Web App, API panel
+The shared design system is signal-green `#2E9E6B` on ink, Space Grotesk
+(display) · IBM Plex Sans (body) · JetBrains Mono (code/labels), the lowercase
+`gsm`+`node` wordmark, and the two-arrow routing mark. The source design kit is
+not part of this repository; the tokens are implemented per surface (`theme.js`,
+`style.css`, `theme.dart`) and the exported brand images ship where a surface
+needs to render them. Every UI surface implements it (the Web App, API panel
 and Phone App share a persisted light/dark/system preference under the key
 `gsmnode-theme`; the Phone Agent follows the system theme; the Home Assistant
 Plugin ships the mark and both wordmark variants in its `brand/` folder).
@@ -23,8 +24,8 @@ to the API Server.
 ├────────────┤        │                  │        │              │
 │ Phone App  │───────►│                  │        │              │
 │ (Flutter)  │        │   API Server     │        │  PocketBase  │
-├────────────┤        │      (Go)        │        │ 10.2.1.10:   │
-│Phone Agent │───────►│                  │        │    8028      │
+├────────────┤        │      (Go)        │        │    (:8028)   │
+│Phone Agent │───────►│                  │        │              │
 │ (Flutter)  │        │                  │        │              │
 ├────────────┤        │                  │        │              │
 │ HA plugin  │◄──────►│                  │───────►│              │
@@ -77,11 +78,24 @@ ownership in application logic.
 
 ## Run order
 
-1. **PocketBase** — already running at `http://10.2.1.10:8028`.
+Building from source, against a PocketBase you run yourself. To skip all of this
+and bring the server side up in containers instead, jump to
+[Deploy with Docker](#deploy-with-docker).
+
+```powershell
+git clone https://github.com/freefall-dev/gsmnode.git
+cd gsmnode
+```
+
+1. **PocketBase** v0.23+ — run it however you like (the
+   [official binary](https://pocketbase.io/docs/), or the image built by
+   [`Docker/pocketbase/`](Docker/pocketbase/)) and note its URL; the rest of this
+   assumes `http://localhost:8028`. Create its superuser on first launch — that
+   is the `PB_ADMIN_*` login below.
 2. **API Server** (`:8080`):
    ```powershell
    cd "API Server"
-   Copy-Item .env.example .env   # fill in PB_ADMIN_* and JWT_SECRET
+   Copy-Item .env.example .env   # set POCKETBASE_URL, PB_ADMIN_* and JWT_SECRET
    node scripts/setup-pocketbase.mjs           # one-time schema setup
    node scripts/create-user.mjs you@example.com "password" "Your Name"
    ./scripts/Run-ApiServer.ps1
@@ -114,7 +128,9 @@ ownership in application logic.
 The run order above builds from source against the existing PocketBase. To bring
 the whole server side up in containers instead, pick one of two shapes — both
 carry a dev compose file that builds from this working tree, and a
-`docker-compose.prod.yml` that pulls prebuilt images from the registry:
+`docker-compose.prod.yml` that pulls prebuilt images from a registry (no public
+one is published yet, so that file wants image names you built and pushed
+yourself):
 
 | | Layout | Use when |
 |---|---|---|

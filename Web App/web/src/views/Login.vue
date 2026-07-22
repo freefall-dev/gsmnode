@@ -96,7 +96,7 @@ async function submit() {
               type="url"
               autocomplete="off"
               class="gn-input font-mono !text-xs"
-              placeholder="http://10.2.1.101:8080"
+              placeholder="http://192.168.1.50:8080"
             />
             <p class="mt-1.5 text-xs text-muted">
               Leave blank to use this site's built-in server.

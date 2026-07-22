@@ -1,12 +1,12 @@
 // Creates a user in the PocketBase "users" collection to log in with.
 //
 // Usage (PowerShell):
-//   $env:POCKETBASE_URL="http://10.2.1.10:8028"
+//   $env:POCKETBASE_URL="http://localhost:8028"
 //   $env:PB_ADMIN_EMAIL="admin@example.com"
 //   $env:PB_ADMIN_PASSWORD="admin-password"
 //   node scripts/create-user.mjs user@example.com "user-password" "Display Name"
 
-const BASE = (process.env.POCKETBASE_URL || "http://10.2.1.10:8028").replace(/\/$/, "");
+const BASE = (process.env.POCKETBASE_URL || "http://localhost:8028").replace(/\/$/, "");
 const EMAIL = process.env.PB_ADMIN_EMAIL;
 const PASSWORD = process.env.PB_ADMIN_PASSWORD;
 

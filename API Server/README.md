@@ -6,7 +6,7 @@ access as a superuser and enforces ownership in application logic.
 
 ```
 Web App     ─┐
-             ├─►  API Server (:8080)  ─►  PocketBase (10.2.1.10:8028)
+             ├─►  API Server (:8080)  ─►  PocketBase (:8028)
 Phone Agent ─┘
 ```
 
@@ -43,7 +43,7 @@ Copy-Item .env.example .env
 | Variable | Purpose | Default |
 |---|---|---|
 | `API_ADDR` | Listen address | `:8080` |
-| `POCKETBASE_URL` | PocketBase base URL | `http://10.2.1.10:8028` |
+| `POCKETBASE_URL` | PocketBase base URL | `http://localhost:8028` |
 | `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD` | PocketBase superuser login | — (required) |
 | `JWT_SECRET` | Signs client JWTs | dev placeholder |
 | `JWT_ACCESS_TTL` | Access-token lifetime | `24h` |
@@ -70,7 +70,7 @@ so this script is for setting the schema up without starting the server —
 running both is harmless.
 
 ```powershell
-$env:POCKETBASE_URL="http://10.2.1.10:8028"
+$env:POCKETBASE_URL="http://localhost:8028"
 $env:PB_ADMIN_EMAIL="admin@example.com"
 $env:PB_ADMIN_PASSWORD="your-password"
 node scripts/setup-pocketbase.mjs

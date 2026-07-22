@@ -53,7 +53,7 @@ Server URL, then sign in with the user you created via
 `../API Server/scripts/create-user.mjs`.
 
 - Emulator → host: `http://10.0.2.2:8080`
-- Physical phone → the host's LAN IP, e.g. `http://10.2.1.101:8080`
+- Physical phone → the host's LAN IP, e.g. `http://192.168.1.50:8080`
 
 The URL is remembered, and can be changed later under **Settings → Server**.
 
@@ -185,8 +185,8 @@ Two Android settings in `android/gradle.properties` are load-bearing here:
 
 - `kotlin.incremental=false` — Kotlin's incremental compiler stores source paths
   relative to the project and throws when a plugin's sources live on another
-  drive. The pub cache is on `C:` and this repo is on `E:`, which is exactly that
-  case.
+  drive, which is the case on Windows whenever the pub cache and the checkout sit
+  on different drive letters.
 - `android.builtInKotlin=false` (the Flutter template default) — needed by the
   plugins in use. It also rules out `file_picker`, whose current release skips
   applying the Kotlin Gradle Plugin under AGP 9 and then fails to link; hence

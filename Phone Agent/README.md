@@ -79,7 +79,7 @@ flutter run                # build & install on the connected phone
 1. On first launch, enter the **API Server URL**, your **email/password**, and a
    **device name**, then tap *Sign in & register device*.
    - Emulator → host: use `http://10.0.2.2:8080`.
-   - Physical phone → use the host's LAN IP, e.g. `http://10.2.1.x:8080`
+   - Physical phone → use the host's LAN IP, e.g. `http://192.168.1.50:8080`
      (the same network as the phone; make sure the API Server is reachable).
 2. On the home screen, **grant SMS & phone permissions**, then **Start gateway**.
 3. Send a test message from the Web App → it appears in the activity log and is

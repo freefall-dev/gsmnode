@@ -444,8 +444,9 @@ have to be upscaled to reach the hDPI range.
 
 The integration is one surface of **gsmnode**, which also has an API Server, a
 Web App, and two Android apps — a Phone Agent that does the sending and a Phone
-App that manages the gateway. Those live in the project's own repository; this
-one holds the Home Assistant integration alone, because HACS requires
+App that manages the gateway. Those live in the project's own repository,
+[freefall-dev/gsmnode](https://github.com/freefall-dev/gsmnode); this one holds
+the Home Assistant integration alone, because HACS requires
 `custom_components/<domain>/` at the root of the repository it installs from.
 
 It is published by splitting that folder out, so the history here is the real

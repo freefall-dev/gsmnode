@@ -49,7 +49,7 @@ func Load() Config {
 
 	cfg := Config{
 		Addr:          getenv("API_ADDR", ":8080"),
-		PocketBaseURL: strings.TrimRight(getenv("POCKETBASE_URL", "http://10.2.1.10:8028"), "/"),
+		PocketBaseURL: strings.TrimRight(getenv("POCKETBASE_URL", "http://localhost:8028"), "/"),
 		PBAdminEmail:  getenv("PB_ADMIN_EMAIL", ""),
 		PBAdminPass:   getenv("PB_ADMIN_PASSWORD", ""),
 		JWTSecret:     []byte(getenv("JWT_SECRET", "dev-insecure-change-me-please")),

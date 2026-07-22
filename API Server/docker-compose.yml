@@ -19,7 +19,7 @@ services:
       # Container always listens on :8080; map the host port above.
       API_ADDR: ":8080"
       # External PocketBase instance (all DB access goes through this server).
-      POCKETBASE_URL: "${POCKETBASE_URL:-http://10.2.1.10:8028}"
+      POCKETBASE_URL: "${POCKETBASE_URL:-http://host.docker.internal:8028}"
       # Superuser service account used to reach PocketBase. Without these the
       # server still starts, but PocketBase calls fail.
       PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL}"

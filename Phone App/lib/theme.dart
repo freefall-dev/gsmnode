@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// gsmnode design tokens (see Design/SMS Gateway logo design/tokens in the
-/// project root). Brand is signal-green #2E9E6B on an ink/paper cool scale.
+/// gsmnode design tokens. Brand is signal-green #2E9E6B on an ink/paper cool
+/// scale; the Web App's `web/src/theme.js` and `style.css` carry the same ramp.
 ///
 /// Kept deliberately in step with `Phone Agent/lib/theme.dart` — the two apps
 /// ship the same design system, so a token added here usually belongs there too.

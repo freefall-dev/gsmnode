@@ -83,7 +83,7 @@ async function save() {
     <div class="flex flex-col gap-4 px-5 py-4">
       <div>
         <label class="mb-1 block text-xs font-medium text-secondary" for="pb-url">Base URL</label>
-        <input id="pb-url" v-model="form.url" class="gn-input" placeholder="http://10.2.1.10:8028" />
+        <input id="pb-url" v-model="form.url" class="gn-input" placeholder="http://localhost:8028" />
       </div>
 
       <div class="grid gap-4 sm:grid-cols-2">

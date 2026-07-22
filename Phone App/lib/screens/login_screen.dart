@@ -204,7 +204,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   autocorrect: false,
                   style: gsmMono(size: 13, color: cg.textPrimary),
                   decoration: const InputDecoration(
-                    hintText: 'http://10.2.1.101:8080',
+                    hintText: 'http://192.168.1.50:8080',
                   ),
                 ),
               ),

@@ -1,8 +1,8 @@
 # gsmnode — Web App
 
 Browser console for the gateway: a **Vue 3 + Tailwind** SPA served by a small **Go
-backend-for-frontend (BFF)**. Styled with the gsmnode design system
-(`../Design/SMS Gateway logo design/`): signal-green `#2E9E6B` on ink, Space
+backend-for-frontend (BFF)**. Styled with the gsmnode design system: signal-green
+`#2E9E6B` on ink, Space
 Grotesk (display) · IBM Plex Sans (body) · JetBrains Mono (code/labels), Lucide
 icons, and a persisted light/dark toggle (`localStorage` key `gsmnode-theme`,
 `data-gsm-theme` attribute). The BFF serves the built SPA and reverse-proxies

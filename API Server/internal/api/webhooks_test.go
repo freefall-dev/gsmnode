@@ -87,7 +87,7 @@ func TestSignPayloadBindsTimestampAndBody(t *testing.T) {
 func TestRedactURLKeepsTheSecretOut(t *testing.T) {
 	const secret = "2f9a1c7b5e"
 	cases := []string{
-		"http://10.2.1.20:8123/api/webhook/" + secret,
+		"http://192.168.1.50:8123/api/webhook/" + secret,
 		"https://ha.example.com/api/webhook/" + secret + "?x=" + secret,
 	}
 	for _, raw := range cases {

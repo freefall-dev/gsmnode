@@ -30,6 +30,9 @@ __pycache__/
 .env
 *.local
 
+# Per-machine editor/agent state (contains local paths and hostnames)
+.claude/settings.local.json
+
 # OS / editor
 .DS_Store
 Thumbs.db

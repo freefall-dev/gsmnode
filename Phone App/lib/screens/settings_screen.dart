@@ -246,7 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               autocorrect: false,
               style: gsmMono(size: 13, color: cg.textPrimary),
               decoration: const InputDecoration(
-                hintText: 'http://10.2.1.101:8080',
+                hintText: 'http://192.168.1.50:8080',
               ),
               onChanged: (_) => setState(() => _serverSaved = false),
             ),
