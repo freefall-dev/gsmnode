@@ -125,30 +125,59 @@ cd gsmnode
 
 ## Deploy with Docker
 
-The run order above builds from source against the existing PocketBase. To bring
-the whole server side up in containers instead, pick one of two shapes — both
-carry a dev compose file that builds from this working tree, and a
-`docker-compose.prod.yml` that pulls prebuilt images from a registry (no public
-one is published yet, so that file wants image names you built and pushed
-yourself):
+The run order above builds from source against a PocketBase you run yourself. To
+bring the whole server side up in containers instead, pick one of two shapes —
+both carry a `docker-compose.yml` that builds from this working tree, and a
+`docker-compose.prod.yml` that pulls prebuilt images instead of building:
 
 | | Layout | Use when |
 |---|---|---|
-| [`Docker/`](Docker/) | Three containers — PocketBase, API Server, Web App | You want to scale, replace or upgrade the pieces independently |
+| [`Docker/`](Docker/) | Three containers — PocketBase, API Server, Web App | You want to scale, replace or upgrade the pieces independently. The only one with published images, so the only one you can run without building |
 | [`Docker AIO/`](Docker%20AIO/) | One container, all three under supervisord (nginx serves the SPA) | One host, one thing to run |
+
+To build from this tree:
 
 ```powershell
 cd Docker                      # or "Docker AIO"
-Copy-Item .env.example .env    # .env.prod.example for the prebuilt-image files
+Copy-Item .env.example .env
 # edit .env: PB_ADMIN_*, GSMNODE_SUPERADMIN_* and JWT_SECRET at minimum
 docker compose up -d --build
 ```
 
-Then the Web App is on `:8090`, the API Server and its panel on `:8080`, and
-PocketBase's admin UI on `:8070/_/`. Nothing needs seeding by hand: PocketBase
-upserts its superuser from `PB_ADMIN_*`, and the API Server then reconciles the
-schema and creates the app super-admin from `GSMNODE_SUPERADMIN_*`. Every step is
-idempotent, so restarts and upgrades are safe.
+Or, for `Docker/` only, to pull prebuilt images instead of building —
+`docker-compose.prod.yml` and `.env.prod.example` are the only two files you need,
+so this works without cloning the repository:
+
+```powershell
+cd Docker
+Copy-Item .env.prod.example .env
+# edit .env: PB_ADMIN_*, GSMNODE_SUPERADMIN_* and JWT_SECRET at minimum
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Either way the Web App ends up on `:8090`, the API Server and its panel on
+`:8080`, and PocketBase's admin UI on `:8070/_/`. Nothing needs seeding by hand:
+PocketBase upserts its superuser from `PB_ADMIN_*`, and the API Server then
+reconciles the schema and creates the app super-admin from
+`GSMNODE_SUPERADMIN_*`. Every step is idempotent, so restarts and upgrades are
+safe.
+
+### Published images
+
+Three images, on both registries, `linux/amd64` only — on arm64 (Raspberry Pi,
+Apple Silicon) build from source with the first recipe above. `Docker AIO/` has
+no published image; it always builds.
+
+| | GHCR (the default) | Docker Hub |
+|---|---|---|
+| API Server | `ghcr.io/tajniak81/gsmnode-api-server` | `tajniak81/gsmnode-api-server` |
+| Web App | `ghcr.io/tajniak81/gsmnode-web-app` | `tajniak81/gsmnode-web-app` |
+| PocketBase | `ghcr.io/tajniak81/pocketbase-docker-root` | `tajniak81/pocketbase-docker-root` |
+
+`docker-compose.prod.yml` defaults to the GHCR ones at `:latest`. Set `PB_IMAGE`
+/ `API_IMAGE` / `WEB_IMAGE` in `.env` to pin a version, switch to Docker Hub, or
+point at your own build — the gsmnode images also carry `0`, `0.0`, `0.0.4` and
+the short commit sha, and the PocketBase one tracks PocketBase's own version.
 
 `Docker/docker-compose.prod.yml` binds the API panel and the PocketBase admin UI
 to localhost, leaving only the Web App on the network (`PB_BIND` / `API_BIND`

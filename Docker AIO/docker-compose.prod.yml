@@ -2,9 +2,17 @@ name: gsmnode-aio
 
 # Production all-in-one — pulls a prebuilt image from a registry instead of
 # building. One container runs PocketBase + API Server + Web App (nginx).
-# Everything an operator needs to set lives in .env. There is no public registry
-# for this image yet, so AIO_IMAGE must name your own — build and push it with
-# docker-compose.yml.
+# Everything an operator needs to set lives in .env.
+#
+# Unlike the three-container stack in ../Docker/, this image is NOT published
+# anywhere, so AIO_IMAGE must name one you built and pushed yourself:
+#
+#   docker compose build                                  # docker-compose.yml
+#   docker tag gsmnode-aio <registry>/gsmnode-aio:latest
+#   docker push <registry>/gsmnode-aio:latest
+#
+# If you would rather pull than build, use ../Docker/ — its three images are
+# published on GHCR and Docker Hub.
 #
 #   1. cp .env.prod.example .env   (then edit it)
 #   2. docker compose -f docker-compose.prod.yml pull
