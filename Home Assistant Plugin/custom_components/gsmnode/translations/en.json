@@ -47,6 +47,15 @@
   "options": {
     "step": {
       "init": {
+        "title": "gsmnode",
+        "description": "What would you like to set up?",
+        "menu_options": {
+          "panel": "Sidebar item — show an overview inside Home Assistant",
+          "events": "Incoming events — hear about SMS, calls and delivery reports",
+          "notify": "Notify entity — a fixed set of numbers to text"
+        }
+      },
+      "panel": {
         "title": "gsmnode sidebar",
         "description": "Add a gsmnode item to the Home Assistant sidebar, opening one of the gateway's own overviews.\n\nAPI Server panel: {api_base}\nWeb App: {web_app}\n\nLeave the address empty to use the one above for the chosen overview. Set it when Home Assistant, your browser and the API Server disagree about how to reach a service — behind a reverse proxy or a VPN, for instance.",
         "data": {
@@ -58,6 +67,24 @@
         "data_description": {
           "panel_url": "Must be reachable from the browser, not from Home Assistant. A page served over http cannot be embedded in a Home Assistant served over https.",
           "panel_title": "The name shown in the sidebar. Give each gateway its own if you have more than one."
+        }
+      },
+      "events": {
+        "title": "Incoming events",
+        "description": "Pick what the gateway should tell Home Assistant about. Each one arrives as an event on the bus that an automation can trigger on — build one under Settings → Automations, choose the Event trigger, and give it the event type.\n\nCurrent selection fires: {fired}\n\nHome Assistant registers a webhook of its own for this and subscribes it with the gateway; nothing has to be registered by hand, and unticking everything removes the subscription again.",
+        "data": {
+          "events": "Events to receive",
+          "callback_url": "Home Assistant address (optional)"
+        },
+        "data_description": {
+          "callback_url": "Where the gateway should reach Home Assistant, if that differs from the address Home Assistant knows itself by. Just the base, e.g. http://10.2.1.20:8123 — the webhook path is added for you."
+        }
+      },
+      "notify": {
+        "title": "Notify entity",
+        "description": "Give one or more numbers to create a notify entity that texts them. It exists so alerts, blueprints and scripts that only know notify.send_message can reach the gateway; a notify entity has no recipient field of its own.\n\nFor anything that needs to choose recipients, a device or a SIM per message, use the gsmnode.send_sms action instead. Leave this empty to have no notify entity.",
+        "data": {
+          "recipients": "Recipients"
         }
       }
     },
@@ -72,6 +99,20 @@
         "web_app": "Web App — the full gateway UI",
         "api_panel": "API Server panel — status and administration",
         "custom": "Another address"
+      }
+    },
+    "events": {
+      "options": {
+        "sms:received": "SMS received",
+        "sms:sent": "SMS sent",
+        "sms:delivered": "SMS delivered",
+        "sms:failed": "SMS failed",
+        "sms:data-received": "Data SMS received",
+        "mms:received": "MMS received",
+        "mms:downloaded": "MMS downloaded",
+        "call:received": "Call received",
+        "call:sent": "Call placed",
+        "call:failed": "Call failed"
       }
     }
   },

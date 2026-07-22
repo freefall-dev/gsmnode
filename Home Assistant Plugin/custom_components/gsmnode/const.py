@@ -6,6 +6,7 @@ DOMAIN = "gsmnode"
 
 CONF_API_BASE = "api_base"
 CONF_DEVICE_ID = "device_id"
+CONF_WEBHOOK_ID = "webhook_id"
 
 DEFAULT_API_BASE = "http://localhost:8080"
 DEFAULT_NAME = "gsmnode"
@@ -48,3 +49,38 @@ PANEL_CHOICES = [PANEL_NONE, PANEL_WEB_APP, PANEL_API_PANEL, PANEL_CUSTOM]
 
 DEFAULT_PANEL_TITLE = "gsmnode"
 PANEL_ICON = "mdi:message-arrow-right"
+
+# Incoming events (entry options). The gateway POSTs to a webhook this
+# integration registers; each delivery becomes an event on the Home Assistant
+# bus, which an automation can trigger on from the UI.
+CONF_EVENTS = "events"
+CONF_CALLBACK_URL = "callback_url"
+
+# The events the API Server can be subscribed to, in its own canonical order
+# (bootstrap.WebhookEvents on the server side).
+WEBHOOK_EVENTS = [
+    "sms:received",
+    "sms:sent",
+    "sms:delivered",
+    "sms:failed",
+    "sms:data-received",
+    "mms:received",
+    "mms:downloaded",
+    "call:received",
+    "call:sent",
+    "call:failed",
+]
+DEFAULT_EVENTS = ["sms:received"]
+
+# Bus event names are the gateway's, prefixed and made identifier-safe:
+# "sms:data-received" arrives as "gsmnode_sms_data_received".
+EVENT_PREFIX = DOMAIN
+
+
+def bus_event(event: str) -> str:
+    """Return the Home Assistant bus event name for a gateway event."""
+    return f"{EVENT_PREFIX}_{event.replace(':', '_').replace('-', '_')}"
+
+
+# Notify entity (entry options): the numbers notify.send_message texts.
+CONF_RECIPIENTS = "recipients"

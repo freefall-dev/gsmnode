@@ -12,8 +12,9 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 # 15s is a fault worth surfacing rather than one worth waiting out.
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=15)
 
-# Statuses the API Server uses for an accepted write (/api/messages answers 202).
-_OK_STATUSES = (200, 201, 202)
+# Statuses the API Server uses for an accepted write: /api/messages answers 202,
+# webhook registration 201, and deleting a webhook 204.
+_OK_STATUSES = (200, 201, 202, 204)
 
 
 class GsmNodeError(Exception):
@@ -173,6 +174,22 @@ class GsmNodeClient:
         if not isinstance(items, list):
             return []
         return [item for item in items if isinstance(item, dict)]
+
+    async def async_list_webhooks(self) -> list[dict[str, Any]]:
+        """Return the account's registered webhooks."""
+        body = await self._call("GET", "/api/webhooks")
+        items = body.get("items") if isinstance(body, dict) else None
+        if not isinstance(items, list):
+            return []
+        return [item for item in items if isinstance(item, dict)]
+
+    async def async_create_webhook(self, event: str, url: str) -> None:
+        """Subscribe url to one gateway event."""
+        await self._call("POST", "/api/webhooks", {"event": event, "url": url})
+
+    async def async_delete_webhook(self, webhook_id: str) -> None:
+        """Remove a registered webhook by its record id."""
+        await self._call("DELETE", f"/api/webhooks/{webhook_id}")
 
     async def async_web_app_url(self) -> str | None:
         """Ask the API Server where the Web App lives.

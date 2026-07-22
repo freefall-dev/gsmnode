@@ -1,113 +1,69 @@
-"""gsmnode notify platform (legacy YAML).
+"""A notify entity, so gsmnode can be a target for anything that notifies.
 
-Sends SMS — or places a call — through the gsmnode API Server. Kept for setups
-configured before the UI integration existed; new installs should add gsmnode
-from Settings → Devices & Services instead, which also brings the connectivity
-sensors and the `gsmnode.send_sms` / `gsmnode.call` services.
+`gsmnode.send_sms` remains the full-strength way to send — it takes recipients,
+a phone, a SIM slot and a send-later time. This exists for the other half of
+Home Assistant: alerts, blueprints and scripts that only know how to call
+`notify.send_message` against an entity. A notify entity has no recipient field,
+so the numbers are set once in the options and every message goes to them.
 """
 from __future__ import annotations
 
-import logging
-from typing import Any
-
-import voluptuous as vol
-
-from homeassistant.components.notify import (
-    ATTR_DATA,
-    ATTR_TARGET,
-    PLATFORM_SCHEMA,
-    BaseNotificationService,
-)
-from homeassistant.const import CONF_EMAIL, CONF_NAME, CONF_PASSWORD
+from homeassistant.components.notify import NotifyEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .client import GsmNodeClient, GsmNodeError
-from .const import (
-    CONF_API_BASE,
-    CONF_DEVICE_ID,
-    DEFAULT_API_BASE,
-    DEFAULT_NAME,
-    MAX_SIM_SLOT,
-    MIN_SIM_SLOT,
-)
-
-_LOGGER = logging.getLogger(__name__)
-
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-        vol.Optional(CONF_API_BASE, default=DEFAULT_API_BASE): cv.string,
-        vol.Required(CONF_EMAIL): cv.string,
-        vol.Required(CONF_PASSWORD): cv.string,
-        vol.Optional(CONF_DEVICE_ID): cv.string,
-    }
-)
+from . import GsmNodeConfigEntry
+from .client import GsmNodeError
+from .const import CONF_RECIPIENTS, DOMAIN
+from .coordinator import GsmNodeCoordinator
 
 
-async def async_get_service(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
-    discovery_info: DiscoveryInfoType | None = None,
-) -> GsmNodeNotificationService:
-    """Return the gsmnode notification service."""
-    return GsmNodeNotificationService(
-        GsmNodeClient(
-            hass,
-            config[CONF_API_BASE],
-            config[CONF_EMAIL],
-            config[CONF_PASSWORD],
-            config.get(CONF_DEVICE_ID),
-        )
-    )
+    entry: GsmNodeConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Add the notify entity, if recipients have been configured for it."""
+    recipients = [
+        number
+        for number in entry.options.get(CONF_RECIPIENTS) or []
+        if str(number).strip()
+    ]
+    if not recipients:
+        return
+    async_add_entities([GsmNodeNotifyEntity(entry.runtime_data, recipients)])
 
 
-class GsmNodeNotificationService(BaseNotificationService):
-    """Implement the notification service for gsmnode."""
+class GsmNodeNotifyEntity(NotifyEntity):
+    """Texts a fixed set of numbers through the gateway."""
 
-    def __init__(self, client: GsmNodeClient) -> None:
-        """Initialize the service."""
-        self._client = client
+    _attr_has_entity_name = True
+    _attr_name = "SMS"
+    _attr_icon = "mdi:message-arrow-right"
 
-    async def async_send_message(self, message: str = "", **kwargs: Any) -> None:
-        """Send an SMS, or place a phone call when `data.type` is `call`.
+    def __init__(
+        self, coordinator: GsmNodeCoordinator, recipients: list[str]
+    ) -> None:
+        entry_id = coordinator.config_entry.entry_id
+        self._client = coordinator.client
+        self._recipients = recipients
+        self._attr_unique_id = f"{entry_id}_notify"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry_id)})
 
-        Recipient numbers come from the `target` field. Optional data overrides:
-        `device_id` (which phone), `sim_number` (SMS only, a 0-based SIM slot),
-        and `type: call` to dial the target(s) instead of texting them.
-        """
-        targets = kwargs.get(ATTR_TARGET)
-        if not targets:
-            _LOGGER.error("gsmnode: no target phone number(s) provided")
-            return
+    @property
+    def extra_state_attributes(self) -> dict[str, list[str]]:
+        """Show who this entity texts, since the message itself cannot say."""
+        return {"recipients": self._recipients}
 
-        data = kwargs.get(ATTR_DATA) or {}
-        device_id = data.get("device_id")
-        sim_number = data.get("sim_number")
-        if sim_number is not None and not (
-            isinstance(sim_number, int) and MIN_SIM_SLOT <= sim_number <= MAX_SIM_SLOT
-        ):
-            _LOGGER.error(
-                "gsmnode: sim_number must be a slot between %s and %s, got %r",
-                MIN_SIM_SLOT,
-                MAX_SIM_SLOT,
-                sim_number,
-            )
-            return
-
+    async def async_send_message(self, message: str, title: str | None = None) -> None:
+        """Send the message as an SMS. A title has no place in an SMS."""
         try:
-            if str(data.get("type", "")).lower() == "call":
-                # One call per target number (a call has a single recipient).
-                for number in targets:
-                    await self._client.place_call(number, device_id)
-                return
-            await self._client.send_sms(
-                list(targets),
-                message,
-                device_id,
-                sim_number,
-                data.get("schedule_at"),
-            )
+            await self._client.send_sms(self._recipients, message)
         except GsmNodeError as err:
-            _LOGGER.error("gsmnode: %s", err)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="request_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err

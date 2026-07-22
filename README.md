@@ -9,7 +9,8 @@ signal-green `#2E9E6B` on ink, Space Grotesk (display) · IBM Plex Sans (body) �
 JetBrains Mono (code/labels), the lowercase `gsm`+`node` wordmark, and the
 two-arrow routing mark. Every UI surface implements it (the Web App, API panel
 and Phone App share a persisted light/dark/system preference under the key
-`gsmnode-theme`; the Phone Agent follows the system theme).
+`gsmnode-theme`; the Phone Agent follows the system theme; the Home Assistant
+Plugin ships the mark and both wordmark variants in its `brand/` folder).
 
 The application surfaces sit in front of a shared PocketBase. **The API Server
 is the only component that talks to PocketBase**; every other surface talks only
@@ -19,13 +20,16 @@ to the API Server.
 ┌────────────┐        ┌──────────────────┐        ┌──────────────┐
 │  Web App   │───────►│                  │───────►│              │
 │ (Vue/Go)   │        │                  │        │              │
-├────────────┤        │   API Server     │        │  PocketBase  │
-│ Phone App  │───────►│     (Go)         │        │ 10.2.1.10:   │
-│ (Flutter)  │        │                  │        │    8028      │
 ├────────────┤        │                  │        │              │
-│Phone Agent │───────►│                  │───────►│              │
-│ (Flutter)  │        └──────────────────┘        └──────────────┘
-└────────────┘
+│ Phone App  │───────►│                  │        │              │
+│ (Flutter)  │        │   API Server     │        │  PocketBase  │
+├────────────┤        │      (Go)        │        │ 10.2.1.10:   │
+│Phone Agent │───────►│                  │        │    8028      │
+│ (Flutter)  │        │                  │        │              │
+├────────────┤        │                  │        │              │
+│ HA plugin  │◄──────►│                  │───────►│              │
+│  (Python)  │        │                  │        │              │
+└────────────┘        └──────────────────┘        └──────────────┘
 ```
 
 Two distinct phone-side surfaces, deliberately kept separate:
@@ -39,6 +43,13 @@ Two distinct phone-side surfaces, deliberately kept separate:
 They install separately (`app.gsmnode.phoneagent` and `app.gsmnode.phoneapp`) and can
 sit side by side on one device.
 
+The **Home Assistant Plugin** is the fourth client, and the only one that is
+both: it sends SMS and places calls from automations, watches the gateway and
+each phone as connectivity sensors, subscribes itself to the gateway's webhooks
+so incoming messages and calls become Home Assistant events, and can put either
+of the existing overviews in Home Assistant's sidebar. It is configured entirely
+from the Home Assistant UI — nothing goes in `configuration.yaml`.
+
 ## Surfaces
 
 | Folder | Stack | Port | Status |
@@ -47,7 +58,7 @@ sit side by side on one device.
 | [`Web App/`](Web%20App/) | Go BFF + Vue 3 + Tailwind | `:8090` | ✅ Built & verified |
 | [`Phone Agent/`](Phone%20Agent/) | Flutter (Android) | — | ✅ Built & run on a real device; foreground service + delivery reports |
 | [`Phone App/`](Phone%20App/) | Flutter (Android) | — | ✅ Built — mobile mirror of the Web App; not yet run against a live server |
-| [`Home Assistant Plugin/`](Home%20Assistant%20Plugin/) | HA custom component (Python) | — | ✅ UI config flow, `send_sms`/`call` services, gateway + per-phone sensors (legacy `notify.gsmnode` kept) |
+| [`Home Assistant Plugin/`](Home%20Assistant%20Plugin/) | HA custom component (Python) | — | ✅ UI-only (no YAML): config flow, `send_sms`/`call` services, gateway + per-phone sensors, incoming events, notify entity, optional sidebar panel |
 
 ## PocketBase collections
 
@@ -85,6 +96,10 @@ ownership in application logic.
 5. **Phone App** (optional) — see [`Phone App/README.md`](Phone%20App/README.md)
    (`flutter pub get`, `flutter run`, then point it at the API Server on the
    sign-in screen).
+6. **Home Assistant Plugin** (optional) — copy
+   `Home Assistant Plugin/custom_components/gsmnode/` into `<config>/custom_components/`,
+   restart Home Assistant, then add **gsmnode** under Settings → Devices &
+   Services. See [`Home Assistant Plugin/README.md`](Home%20Assistant%20Plugin/README.md).
 
 ## Deploy with Docker
 
@@ -133,7 +148,9 @@ the phone (see their READMEs).
 Events `sms:received`, `sms:sent`, `sms:delivered`, `sms:failed`,
 `sms:data-received`, `mms:received`, `mms:downloaded`, `call:received`,
 `call:sent`, `call:failed` are POSTed to registered URLs as
-`{event, device_id, payload, created_at}`.
+`{event, device_id, payload, created_at}`. The
+[Home Assistant Plugin](Home%20Assistant%20Plugin/README.md) subscribes itself to
+whichever of these you tick and re-fires them on Home Assistant's event bus.
 
 ## Plugins & Email-to-SMS
 
@@ -170,3 +187,5 @@ See [`API Server/README.md`](API%20Server/README.md) for the wire format.
 - [Web App README](Web%20App/README.md) — dev/build, pages
 - [Phone App README](Phone%20App/README.md) — Flutter build, screens, API mapping
 - [Phone Agent README](Phone%20Agent/README.md) — Flutter build + native SMS wiring
+- [Home Assistant Plugin README](Home%20Assistant%20Plugin/README.md) — install,
+  services, sensors, incoming events, notify entity, sidebar panel

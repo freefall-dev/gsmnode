@@ -1,17 +1,19 @@
 """The gsmnode integration.
 
-Sends SMS and places phone calls through the gsmnode API Server. Configured
-from the UI (Settings → Devices & Services → Add Integration → gsmnode).
+Sends SMS and places phone calls through the gsmnode API Server, and hears back
+when messages and calls arrive. Everything is configured from the UI — there is
+no YAML for any of it (Settings → Devices & Services → Add Integration →
+gsmnode, then Configure for the sidebar panel, incoming events and notify).
 
 Exposes two services — `gsmnode.send_sms` and `gsmnode.call` — an "API Server"
-connectivity binary sensor, and one connectivity sensor per registered phone. A
-legacy `notify.gsmnode` platform (YAML) is also available for backward
-compatibility (see notify.py / README).
+connectivity binary sensor, one connectivity sensor per registered phone, an
+optional notify entity, and an optional sidebar panel.
 """
 from __future__ import annotations
 
 import voluptuous as vol
 
+from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -31,6 +33,7 @@ from .const import (
     ATTR_SIM_NUMBER,
     CONF_API_BASE,
     CONF_DEVICE_ID,
+    CONF_WEBHOOK_ID,
     DOMAIN,
     MAX_SIM_SLOT,
     MIN_SIM_SLOT,
@@ -38,13 +41,14 @@ from .const import (
     SERVICE_SEND_SMS,
 )
 from .coordinator import GsmNodeCoordinator
+from .events import async_remove_events, async_setup_events
 from .panel import async_setup_panel
 
 type GsmNodeConfigEntry = ConfigEntry[GsmNodeCoordinator]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR]
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.NOTIFY]
 
 SEND_SMS_SCHEMA = vol.Schema(
     {
@@ -77,6 +81,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: GsmNodeConfigEntry) -> bool:
     """Set up gsmnode from a config entry."""
+    if not entry.data.get(CONF_WEBHOOK_ID):
+        # Entries created before incoming events existed have no webhook id.
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_WEBHOOK_ID: webhook.async_generate_id()}
+        )
+
     client = GsmNodeClient(
         hass,
         entry.data[CONF_API_BASE],
@@ -90,6 +100,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GsmNodeConfigEntry) -> b
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_setup_panel(hass, entry, client)
+    await async_setup_events(hass, entry, client)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
 
@@ -97,10 +108,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: GsmNodeConfigEntry) -> b
 async def async_unload_entry(hass: HomeAssistant, entry: GsmNodeConfigEntry) -> bool:
     """Unload a config entry.
 
-    The sidebar panel removes itself through the async_on_unload callback
-    registered when it was added.
+    The sidebar panel and the webhook remove themselves through the
+    async_on_unload callbacks registered when they were added.
     """
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: GsmNodeConfigEntry) -> None:
+    """Leave nothing behind on the gateway when the entry is deleted."""
+    await async_remove_events(hass, entry)
 
 
 async def _async_options_updated(

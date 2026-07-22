@@ -1,11 +1,11 @@
 {
   "domain": "gsmnode",
   "name": "gsmnode",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "config_flow": true,
   "documentation": "http://10.2.1.10:3104/FreeFallDev/GsmNode",
   "issue_tracker": "http://10.2.1.10:3104/FreeFallDev/GsmNode/issues",
-  "dependencies": ["frontend"],
+  "dependencies": ["frontend", "webhook"],
   "codeowners": [],
   "requirements": [],
   "integration_type": "service",

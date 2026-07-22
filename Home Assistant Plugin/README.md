@@ -1,14 +1,19 @@
 # gsmnode — Home Assistant Integration
 
-A custom Home Assistant integration that sends SMS **and places phone calls**
-through the gsmnode **API Server**. It can be added and configured entirely
-from the Home Assistant UI.
+A custom Home Assistant integration that sends SMS, places phone calls, and
+hears back from the gateway when messages and calls arrive — through the gsmnode
+**API Server**.
 
 ```
 Home Assistant ──► API Server (/api/messages, /api/calls) ──► your phone ──► SMS / call
+Home Assistant ◄── API Server (webhooks)                  ◄── your phone ◄── SMS / call
 ```
 
 Like every other client, it talks **only** to the API Server (never PocketBase).
+
+**There is no YAML.** Every part of this — the connection, the sidebar item,
+which events arrive, and who the notify entity texts — is set from the Home
+Assistant UI, and nothing goes in `configuration.yaml`.
 
 ## What you get
 
@@ -19,6 +24,11 @@ Like every other client, it talks **only** to the API Server (never PocketBase).
 - **Sensors** — a `binary_sensor` "API Server" (is the gateway up?) plus one
   connectivity sensor **per registered phone**, so an automation can react to
   the phone that actually sends your texts dropping off.
+- **Incoming events** *(optional)* — tick the gateway events you care about and
+  they arrive on the Home Assistant bus, ready for an Event trigger. The webhook
+  is registered at both ends for you. See below.
+- **Notify entity** *(optional)* — `notify.send_message` support for alerts and
+  blueprints, texting a set of numbers you configure.
 - **Sidebar item** *(optional)* — a **gsmnode** entry in Home Assistant's left
   menu that opens the Web App or the API Server panel in place. See below.
 - **Branding** — the gsmnode mark and wordmark ship in `brand/`, so the
@@ -91,37 +101,34 @@ to use — the automation editor offers a picker for it.
 ### Example automation
 
 ```yaml
-automation:
-  - alias: "Water leak — text then call"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.basement_leak
-        to: "on"
-    action:
-      - action: gsmnode.send_sms
-        data:
-          phone_numbers: ["+15551234567"]
-          message: "Water leak detected in the basement!"
-      - action: gsmnode.call
-        data:
-          phone_number: "+15551234567"
+# Built in the automation editor; this is only what it looks like underneath.
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.basement_leak
+    to: "on"
+actions:
+  - action: gsmnode.send_sms
+    data:
+      phone_numbers: ["+15551234567"]
+      message: "Water leak detected in the basement!"
+  - action: gsmnode.call
+    data:
+      phone_number: "+15551234567"
 ```
 
 ### React to the gateway going offline
 
 ```yaml
-automation:
-  - alias: "Alert if SMS gateway API is down"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.gsmnode_api_server
-        to: "off"
-        for: "00:02:00"
-    action:
-      - action: persistent_notification.create
-        data:
-          title: "gsmnode"
-          message: "The API Server is unreachable."
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.gsmnode_api_server
+    to: "off"
+    for: "00:02:00"
+actions:
+  - action: persistent_notification.create
+    data:
+      title: "gsmnode"
+      message: "The API Server is unreachable."
 ```
 
 The same trigger shape works on a phone's own sensor (its entity id comes from
@@ -135,7 +142,8 @@ own panel — so the integration does not reimplement either. It puts an item in
 Home Assistant's sidebar that opens the one you choose, in place, without
 leaving Home Assistant.
 
-Set it up under **Settings → Devices & Services → gsmnode → Configure**:
+Set it up under **Settings → Devices & Services → gsmnode → Configure →
+Sidebar item**:
 
 | Overview to show | Opens |
 |---|---|
@@ -165,18 +173,75 @@ Two limits worth knowing before you wonder why a page is blank:
   not sign you in to the Web App; that session lives in the frame and persists
   there like it would in a tab.
 
-## Receiving SMS in Home Assistant
+## Incoming events
 
-To **receive** incoming texts, register the API Server's `sms:received` webhook
-against a HA webhook trigger. A ready-to-use snippet is in
-[`configuration.example.yaml`](configuration.example.yaml).
+Sending is only half a gateway. **Configure → Incoming events** ticks what the
+gateway should tell Home Assistant about:
 
-## Legacy YAML `notify` platform (optional)
+| Event | Fires as | Carries |
+|---|---|---|
+| `sms:received` | `gsmnode_sms_received` | `phone_number`, `message`, `received_at`, `sim_slot`, `encrypted` |
+| `sms:sent` · `sms:delivered` · `sms:failed` | `gsmnode_sms_sent` … | `message_id`, `phone_numbers`, `status`, `error` |
+| `sms:data-received` | `gsmnode_sms_data_received` | the above plus `data_payload`, `data_port` |
+| `mms:received` · `mms:downloaded` | `gsmnode_mms_received` … | the above plus `subject`, `attachments` |
+| `call:received` · `call:sent` · `call:failed` | `gsmnode_call_received` … | `call_id`, `phone_number`, `direction`, `status`, `started_at`, `duration` |
 
-A `notify.gsmnode` service is still available for those who prefer YAML
-(`notify.py`). It's independent of the UI integration — see
-[`configuration.example.yaml`](configuration.example.yaml). For new setups, the
-UI integration above is recommended.
+Nothing has to be registered by hand at either end. Home Assistant mints a
+webhook of its own when the entry is created, and the integration subscribes
+that URL with the API Server for exactly the ticked events — unticking removes
+the subscription again, and deleting the integration unsubscribes it entirely.
+Only subscriptions carrying this Home Assistant's webhook id are touched, so
+anything you registered yourself in the Web App is left alone.
+
+To use one, build an automation (**Settings → Automations → Create**), choose
+the **Event** trigger, and give it the event type from the table — the options
+form prints the exact names your current selection produces. Every event also
+carries `device_id` and `created_at`, and the payload is flattened to the top
+level, so a template reads `trigger.event.data.phone_number` directly:
+
+```yaml
+# What the UI editor produces — you never have to write this by hand.
+triggers:
+  - trigger: event
+    event_type: gsmnode_sms_received
+actions:
+  - action: persistent_notification.create
+    data:
+      title: "SMS from {{ trigger.event.data.phone_number }}"
+      message: "{{ trigger.event.data.message }}"
+```
+
+Two things to know:
+
+- The gateway has to be able to **reach Home Assistant**. The address used is
+  the one Home Assistant knows itself by (internal first, external as a
+  fallback); if the gateway needs a different one, set it in the same form.
+- With **end-to-end encryption** on, `phone_number` and `message` arrive as
+  `gsmenc:v1:…` ciphertext. Home Assistant has no passphrase and cannot read
+  them — this integration does not do E2E.
+
+## Notify entity
+
+**Configure → Notify entity** takes a list of numbers and creates a notify
+entity that texts them, so anything speaking `notify.send_message` — alerts,
+blueprints, scripts — can reach the gateway:
+
+```yaml
+action: notify.send_message
+target:
+  entity_id: notify.gsmnode_sms
+data:
+  message: "Washing machine finished"
+```
+
+A notify entity has no recipient field of its own, which is why the numbers are
+fixed here. Anything that needs to pick recipients, a phone or a SIM per message
+wants `gsmnode.send_sms` instead. Leave the list empty and no entity is created.
+
+> Replaced the old YAML `notify.gsmnode` platform in 3.0.0. If you had one in
+> `configuration.yaml`, delete that block and set the numbers here; automations
+> calling `notify.gsmnode` with a `target:` should move to `gsmnode.send_sms`,
+> which takes recipients per call.
 
 ## How it works
 
@@ -194,6 +259,11 @@ UI integration above is recommended.
   registered when the entry loads and removed when it unloads. Nothing is
   proxied through Home Assistant — the browser fetches the page straight from
   the gateway.
+- Incoming events use Home Assistant's own webhook component. The id is minted
+  once per entry and stored with it, the URL is `GET`-proof (`POST` only), and
+  each delivery is re-fired on the bus. Subscriptions on the gateway are
+  reconciled on every load, so the set on the server always matches the ticks in
+  the form.
 
 ## Brand assets
 
