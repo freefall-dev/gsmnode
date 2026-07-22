@@ -47,7 +47,7 @@ sit side by side on one device.
 | [`Web App/`](Web%20App/) | Go BFF + Vue 3 + Tailwind | `:8090` | ✅ Built & verified |
 | [`Phone Agent/`](Phone%20Agent/) | Flutter (Android) | — | ✅ Built & run on a real device; foreground service + delivery reports |
 | [`Phone App/`](Phone%20App/) | Flutter (Android) | — | ✅ Built — mobile mirror of the Web App; not yet run against a live server |
-| [`Home Assistant Plugin/`](Home%20Assistant%20Plugin/) | HA custom component (Python) | — | ✅ `notify.gsmnode` service; flow validated |
+| [`Home Assistant Plugin/`](Home%20Assistant%20Plugin/) | HA custom component (Python) | — | ✅ UI config flow, `send_sms`/`call` services, gateway + per-phone sensors (legacy `notify.gsmnode` kept) |
 
 ## PocketBase collections
 

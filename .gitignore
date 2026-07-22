@@ -22,6 +22,10 @@ Phone Agent/android/key.properties
 # Go build output / binaries
 *.exe
 
+# Python bytecode (Home Assistant Plugin)
+__pycache__/
+*.py[cod]
+
 # Environment & secrets
 .env
 *.local

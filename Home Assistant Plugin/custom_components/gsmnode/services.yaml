@@ -2,6 +2,12 @@ send_sms:
   name: Send SMS
   description: Send an SMS through the gateway.
   fields:
+    config_entry_id:
+      name: Gateway
+      description: Which gsmnode gateway to send through. Only needed when more than one is configured.
+      selector:
+        config_entry:
+          integration: gsmnode
     phone_numbers:
       name: Phone numbers
       description: One or more recipient phone numbers.
@@ -19,25 +25,37 @@ send_sms:
         text:
           multiline: true
     device_id:
-      name: Device
-      description: Device to send from (defaults to the configured / most recent device).
+      name: Phone
+      description: Gateway phone to send from, by its device ID (defaults to the configured one, else the most recently seen).
       example: my-phone
       selector:
         text:
     sim_number:
-      name: SIM number
-      description: Which SIM to use on a dual-SIM phone.
-      example: 1
+      name: SIM slot
+      description: Which SIM to send on, counting from 0. Leave empty for the phone's default SIM.
+      example: 0
       selector:
         number:
-          min: 1
-          max: 4
+          min: 0
+          max: 3
           mode: box
+    schedule_at:
+      name: Send at
+      description: Hold the message until this time instead of sending it now.
+      example: "2026-07-22 18:30:00"
+      selector:
+        datetime:
 
 call:
   name: Place call
-  description: Tell a gateway device to place an outbound phone call.
+  description: Tell a gateway phone to place an outbound call.
   fields:
+    config_entry_id:
+      name: Gateway
+      description: Which gsmnode gateway to call through. Only needed when more than one is configured.
+      selector:
+        config_entry:
+          integration: gsmnode
     phone_number:
       name: Phone number
       description: The number to call.
@@ -46,8 +64,8 @@ call:
       selector:
         text:
     device_id:
-      name: Device
-      description: Device to call from (defaults to the configured / most recent device).
+      name: Phone
+      description: Gateway phone to call from, by its device ID (defaults to the configured one, else the most recently seen).
       example: my-phone
       selector:
         text:

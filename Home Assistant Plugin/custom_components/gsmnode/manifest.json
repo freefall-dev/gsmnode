@@ -1,13 +1,14 @@
 {
   "domain": "gsmnode",
   "name": "gsmnode",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "config_flow": true,
-  "documentation": "https://github.com/your-org/sms-gateway",
-  "issue_tracker": "https://github.com/your-org/sms-gateway/issues",
+  "documentation": "http://10.2.1.10:3104/FreeFallDev/GsmNode",
+  "issue_tracker": "http://10.2.1.10:3104/FreeFallDev/GsmNode/issues",
   "dependencies": [],
   "codeowners": [],
   "requirements": [],
   "integration_type": "service",
-  "iot_class": "local_polling"
+  "iot_class": "local_polling",
+  "loggers": ["custom_components.gsmnode"]
 }

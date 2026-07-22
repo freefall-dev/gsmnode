@@ -8,7 +8,28 @@
           "api_base": "API Server URL",
           "email": "Email",
           "password": "Password",
-          "device_id": "Default device ID (optional)"
+          "device_id": "Default phone (optional)"
+        },
+        "data_description": {
+          "api_base": "For example http://10.2.1.10:8080 — it must be reachable from Home Assistant.",
+          "device_id": "Device ID of the phone to send through by default. Leave empty to use the most recently seen one."
+        }
+      },
+      "reconfigure": {
+        "title": "gsmnode",
+        "description": "Update where the API Server lives, or the login used to reach it.",
+        "data": {
+          "api_base": "API Server URL",
+          "email": "Email",
+          "password": "Password",
+          "device_id": "Default phone (optional)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "gsmnode",
+        "description": "The API Server rejected the saved credentials for {email}. Enter the password again.",
+        "data": {
+          "password": "Password"
         }
       }
     },
@@ -17,7 +38,10 @@
       "invalid_auth": "Invalid email or password."
     },
     "abort": {
-      "already_configured": "This gateway is already configured."
+      "already_configured": "This gateway is already configured.",
+      "account_mismatch": "Those settings point at a different gateway account. Add it as a new integration instead.",
+      "reconfigure_successful": "gsmnode was reconfigured.",
+      "reauth_successful": "gsmnode was re-authenticated."
     }
   },
   "services": {
@@ -25,19 +49,29 @@
       "name": "Send SMS",
       "description": "Send an SMS through the gateway.",
       "fields": {
+        "config_entry_id": { "name": "Gateway", "description": "Which gsmnode gateway to send through. Only needed when more than one is configured." },
         "phone_numbers": { "name": "Phone numbers", "description": "One or more recipient phone numbers." },
         "message": { "name": "Message", "description": "The text to send." },
-        "device_id": { "name": "Device", "description": "Device to send from." },
-        "sim_number": { "name": "SIM number", "description": "Which SIM to use on a dual-SIM phone." }
+        "device_id": { "name": "Phone", "description": "Gateway phone to send from, by its device ID." },
+        "sim_number": { "name": "SIM slot", "description": "Which SIM to send on, counting from 0. Leave empty for the phone's default SIM." },
+        "schedule_at": { "name": "Send at", "description": "Hold the message until this time instead of sending it now." }
       }
     },
     "call": {
       "name": "Place call",
-      "description": "Tell a gateway device to place an outbound phone call.",
+      "description": "Tell a gateway phone to place an outbound call.",
       "fields": {
+        "config_entry_id": { "name": "Gateway", "description": "Which gsmnode gateway to call through. Only needed when more than one is configured." },
         "phone_number": { "name": "Phone number", "description": "The number to call." },
-        "device_id": { "name": "Device", "description": "Device to call from." }
+        "device_id": { "name": "Phone", "description": "Gateway phone to call from, by its device ID." }
       }
     }
+  },
+  "exceptions": {
+    "no_gateway": { "message": "No gsmnode gateway is set up. Add the integration first." },
+    "ambiguous_gateway": { "message": "More than one gsmnode gateway is set up. Say which one to use in the Gateway field." },
+    "entry_not_loaded": { "message": "The gsmnode gateway {entry_id} is unknown or not loaded." },
+    "auth_failed": { "message": "The API Server rejected the gsmnode credentials: {error}" },
+    "request_failed": { "message": "The gsmnode API Server did not accept the request: {error}" }
   }
 }

@@ -10,7 +10,7 @@ notify:
     api_base: http://10.2.1.10:8080   # the gsmnode API Server (reachable from HA)
     email: !secret gsmnode_email
     password: !secret gsmnode_password
-    device_id: my-phone               # optional: pin to a specific device
+    device_id: my-phone               # optional: pin to a specific phone
 
 # secrets.yaml:
 #   gsmnode_email: you@example.com
@@ -18,11 +18,18 @@ notify:
 
 # --- Usage ----------------------------------------------------------------
 # Send an SMS:
-#   service: notify.gsmnode
+#   action: notify.gsmnode
 #   data: { message: "Hello", target: ["+15551234567"] }
 #
+# Send on the second SIM, later (slots count from 0):
+#   action: notify.gsmnode
+#   data:
+#     message: "Hello"
+#     target: ["+15551234567"]
+#     data: { sim_number: 1, schedule_at: "2026-07-22T18:30:00Z" }
+#
 # Place a phone call (gateway phone dials the number; message is ignored):
-#   service: notify.gsmnode
+#   action: notify.gsmnode
 #   data: { message: "", target: ["+15551234567"], data: { type: call } }
 
 # --- Optional: receive incoming SMS as Home Assistant events ---------------
@@ -38,7 +45,7 @@ notify:
 #         allowed_methods: [POST]
 #         local_only: true
 #     action:
-#       - service: persistent_notification.create
+#       - action: persistent_notification.create
 #         data:
 #           title: "SMS from {{ trigger.json.payload.phone_number }}"
 #           message: "{{ trigger.json.payload.message }}"
@@ -47,3 +54,6 @@ notify:
 #      http://<home-assistant>:8123/api/webhook/gsmnode_incoming
 #    e.g. via the Web App "Webhooks" page or:
 #      POST /api/webhooks  {"event":"sms:received","url":"<that url>"}
+#
+#    Other events the same trigger shape works for: sms:sent, sms:delivered,
+#    sms:failed, mms:received, call:received, call:sent, call:failed.

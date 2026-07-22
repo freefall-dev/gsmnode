@@ -12,11 +12,13 @@ Like every other client, it talks **only** to the API Server (never PocketBase).
 
 ## What you get
 
-- **UI setup** (config flow) — add it under *Settings → Devices & Services*.
+- **UI setup** (config flow) — add it under *Settings → Devices & Services*, and
+  change the URL or password later without losing your entities (*Reconfigure*).
 - **Services** — `gsmnode.send_sms` and `gsmnode.call`, with field
   pickers in the automation editor and *Developer Tools → Actions*.
-- **Sensor** — `binary_sensor` "API Server" (connectivity) so you can see and
-  automate on the gateway being up/down.
+- **Sensors** — a `binary_sensor` "API Server" (is the gateway up?) plus one
+  connectivity sensor **per registered phone**, so an automation can react to
+  the phone that actually sends your texts dropping off.
 
 ## Install
 
@@ -38,15 +40,21 @@ Like every other client, it talks **only** to the API Server (never PocketBase).
 1. **Settings → Devices & Services → Add Integration**.
 2. Search for **gsmnode**.
 3. Fill in the form:
-   - **API Server URL** — e.g. `http://10.2.1.101:8080` (must be reachable from HA)
+   - **API Server URL** — e.g. `http://10.2.1.10:8080` (must be reachable from HA)
    - **Email** / **Password** — a gateway user (create one with
      `node "API Server/scripts/create-user.mjs" ha@local "pass" "Home Assistant"`)
-   - **Default device ID** *(optional)* — pin sends/calls to a specific phone
+   - **Default phone** *(optional)* — pin sends/calls to a specific phone, by its
+     device ID
 
    The form validates by logging in; you'll get *Invalid auth* or *Cannot
    connect* if something's wrong.
 
-A **gsmnode** device appears with an **API Server** connectivity sensor.
+A **gsmnode** device appears with an **API Server** connectivity sensor, and
+each phone registered to that account gets its own device and sensor beneath it.
+
+If the password changes on the gateway, Home Assistant raises a
+**Reauthentication** notification instead of silently failing; if the server
+moves, use **Reconfigure** on the integration.
 
 ## Use it
 
@@ -58,7 +66,8 @@ data:
   phone_numbers: ["+15551234567"]
   message: "Hello from Home Assistant"
   device_id: my-phone   # optional
-  sim_number: 1         # optional (dual-SIM)
+  sim_number: 0         # optional (dual-SIM; slots count from 0)
+  schedule_at: "2026-07-22 18:30:00"  # optional (send later)
 ```
 
 ### Place a call
@@ -69,6 +78,9 @@ data:
   phone_number: "+15551234567"
   device_id: my-phone   # optional
 ```
+
+With more than one gateway configured, add `config_entry_id:` to say which one
+to use — the automation editor offers a picker for it.
 
 ### Example automation
 
@@ -106,6 +118,10 @@ automation:
           message: "The API Server is unreachable."
 ```
 
+The same trigger shape works on a phone's own sensor (its entity id comes from
+the phone's name) — useful when the API Server is up but the phone that does the
+sending has stopped routing.
+
 ## Receiving SMS in Home Assistant
 
 To **receive** incoming texts, register the API Server's `sms:received` webhook
@@ -121,13 +137,28 @@ UI integration above is recommended.
 
 ## How it works
 
-- On first send it logs in (`POST /api/auth/login`) and caches the JWT; on a
-  `401` it re-logs in once and retries.
+- On first use it logs in (`POST /api/auth/login`) and caches the token; on a
+  `401` it re-logs in once and retries, and gives up into a reauth prompt if
+  that fails too.
 - `send_sms` → `POST /api/messages`; `call` → `POST /api/calls`.
-- The sensor polls `GET /api/health` every 30s.
-- All HTTP uses Home Assistant's shared aiohttp session (fully async).
+- Every 30s one coordinator polls `GET /api/health` and `GET /api/devices` and
+  feeds both the gateway sensor and the per-phone ones. An unreachable server
+  turns the sensor **off** rather than making it *unavailable* — reporting that
+  is the sensor's whole job.
+- All HTTP uses Home Assistant's shared aiohttp session (fully async), with a
+  15s timeout per request.
 
 ## Notes / limitations
 
 - The API Server must be reachable from the Home Assistant host.
 - No external dependencies (`requirements: []`).
+- SIM slots are **0-based** here and everywhere else in gsmnode: slot `0` is the
+  first SIM. (A phone's sensor lists its slots and carriers in its attributes.)
+- Only plain SMS and calls are wired up. The API Server also accepts **MMS**
+  (`type: mms` with subject/attachments) and **data SMS** (`type: data`); those
+  have no service here yet.
+- **End-to-end encryption is not supported.** Messages sent from here are
+  plaintext and flagged as such, so a Phone Agent with a passphrase still sends
+  them fine — but the API Server can read them, unlike ones composed in the Web
+  App. Incoming SMS relayed to a HA webhook likewise arrive as ciphertext if the
+  Phone Agent encrypted them.
