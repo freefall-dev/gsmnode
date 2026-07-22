@@ -19,6 +19,10 @@ Like every other client, it talks **only** to the API Server (never PocketBase).
 - **Sensors** — a `binary_sensor` "API Server" (is the gateway up?) plus one
   connectivity sensor **per registered phone**, so an automation can react to
   the phone that actually sends your texts dropping off.
+- **Branding** — the gsmnode mark and wordmark ship in `brand/`, so the
+  integration carries its own icon instead of a puzzle piece (Home Assistant
+  **2026.3+**; older versions ignore the folder). The two actions get icons on
+  any version through `icons.json`.
 
 ## Install
 
@@ -147,6 +151,26 @@ UI integration above is recommended.
   is the sensor's whole job.
 - All HTTP uses Home Assistant's shared aiohttp session (fully async), with a
   15s timeout per request.
+
+## Brand assets
+
+`brand/` holds what Home Assistant shows for the integration itself, in the
+layout and sizes its [brands repository](https://github.com/home-assistant/brands)
+requires — a local `brand/` folder wins over the CDN, so nothing has to be
+submitted upstream:
+
+| File | Source (design kit) | Size |
+|---|---|---|
+| `icon.png` | `app-icon-512.png`, scaled | 256×256 |
+| `icon@2x.png` | `app-icon-512.png` | 512×512 |
+| `logo.png` | `lockup-horizontal-color.png` | 936×224 |
+| `dark_logo.png` | `lockup-horizontal-white.png` | 936×224 |
+
+The icon is the app tile — signal-green with white arrows — which stays legible
+on either theme, so no `dark_icon.png` is needed. The wordmark does need both:
+`logo.png` sets "gsm" in ink, `dark_logo.png` in white. There is no
+`logo@2x.png`; the widest lockup in the kit is 936×224, and its short side would
+have to be upscaled to reach the hDPI range.
 
 ## Notes / limitations
 

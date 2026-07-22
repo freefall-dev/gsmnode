@@ -1,0 +1,10 @@
+{
+  "services": {
+    "send_sms": {
+      "service": "mdi:message-arrow-right"
+    },
+    "call": {
+      "service": "mdi:phone-outgoing"
+    }
+  }
+}
