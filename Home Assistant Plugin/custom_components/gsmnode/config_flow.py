@@ -5,12 +5,33 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .client import GsmNodeAuthError, GsmNodeClient, GsmNodeError
-from .const import CONF_API_BASE, CONF_DEVICE_ID, DEFAULT_API_BASE, DOMAIN
+from .const import (
+    CONF_API_BASE,
+    CONF_DEVICE_ID,
+    CONF_PANEL,
+    CONF_PANEL_ADMIN,
+    CONF_PANEL_TITLE,
+    CONF_PANEL_URL,
+    DEFAULT_API_BASE,
+    DEFAULT_PANEL_TITLE,
+    DOMAIN,
+    PANEL_CHOICES,
+    PANEL_CUSTOM,
+    PANEL_NONE,
+    PANEL_WEB_APP,
+)
+from .panel import async_resolve_panel_url
 
 PASSWORD_SELECTOR = selector.TextSelector(
     selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
@@ -27,11 +48,34 @@ STEP_USER_SCHEMA = vol.Schema(
 
 STEP_REAUTH_SCHEMA = vol.Schema({vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR})
 
+OPTIONS_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_PANEL, default=PANEL_NONE): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=PANEL_CHOICES,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+                translation_key="panel",
+            )
+        ),
+        vol.Optional(CONF_PANEL_URL): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.URL)
+        ),
+        vol.Optional(CONF_PANEL_TITLE, default=DEFAULT_PANEL_TITLE): str,
+        vol.Optional(CONF_PANEL_ADMIN, default=False): selector.BooleanSelector(),
+    }
+)
+
 
 class GsmNodeConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the UI configuration flow."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> GsmNodeOptionsFlow:
+        """Return the options flow, which is where the sidebar panel is set up."""
+        return GsmNodeOptionsFlow()
 
     async def _async_validate(self, data: dict[str, Any]) -> str | None:
         """Log in with these settings; returns an error key, or None on success."""
@@ -129,5 +173,48 @@ class GsmNodeConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=STEP_REAUTH_SCHEMA,
             description_placeholders={CONF_EMAIL: entry.data[CONF_EMAIL]},
+            errors=errors,
+        )
+
+
+class GsmNodeOptionsFlow(OptionsFlow):
+    """Choose which overview, if any, the sidebar item opens."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show and store the panel settings."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            url = (user_input.get(CONF_PANEL_URL) or "").strip()
+            if user_input[CONF_PANEL] == PANEL_CUSTOM and not url:
+                errors[CONF_PANEL_URL] = "url_required"
+            else:
+                options = {k: v for k, v in user_input.items() if v not in (None, "")}
+                if url:
+                    options[CONF_PANEL_URL] = url
+                return self.async_create_entry(data=options)
+
+        # What the Web App choice would resolve to, shown as prose rather than
+        # pre-filled: pre-filling it would send the "API Server panel" choice to
+        # the Web App's address the moment somebody switched between the two.
+        client = GsmNodeClient(
+            self.hass,
+            self.config_entry.data[CONF_API_BASE],
+            self.config_entry.data[CONF_EMAIL],
+            self.config_entry.data[CONF_PASSWORD],
+        )
+        detected = await async_resolve_panel_url(client, PANEL_WEB_APP)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self.add_suggested_values_to_schema(
+                OPTIONS_SCHEMA, user_input or self.config_entry.options
+            ),
+            description_placeholders={
+                "api_base": client.api_base,
+                "web_app": detected or "not reported by the API Server",
+            },
             errors=errors,
         )

@@ -38,6 +38,7 @@ from .const import (
     SERVICE_SEND_SMS,
 )
 from .coordinator import GsmNodeCoordinator
+from .panel import async_setup_panel
 
 type GsmNodeConfigEntry = ConfigEntry[GsmNodeCoordinator]
 
@@ -88,12 +89,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: GsmNodeConfigEntry) -> b
     entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await async_setup_panel(hass, entry, client)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: GsmNodeConfigEntry) -> bool:
-    """Unload a config entry."""
+    """Unload a config entry.
+
+    The sidebar panel removes itself through the async_on_unload callback
+    registered when it was added.
+    """
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def _async_options_updated(
+    hass: HomeAssistant, entry: GsmNodeConfigEntry
+) -> None:
+    """Reload after the options change, so the panel follows the new choice."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 def _async_register_services(hass: HomeAssistant) -> None:

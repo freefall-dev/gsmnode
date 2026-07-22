@@ -174,6 +174,26 @@ class GsmNodeClient:
             return []
         return [item for item in items if isinstance(item, dict)]
 
+    async def async_web_app_url(self) -> str | None:
+        """Ask the API Server where the Web App lives.
+
+        /api/status is public and probes the Web App server-side, reporting the
+        URL it used. That is the address configured on the API Server, which is
+        not always the one a browser can reach (a container name, say) — so it
+        is only ever offered as a suggestion for the user to confirm.
+        """
+        try:
+            status, body = await self._request("GET", "/api/status")
+        except GsmNodeConnectionError:
+            return None
+        if status != 200 or not isinstance(body, dict):
+            return None
+        web_app = body.get("webApp")
+        url = web_app.get("url") if isinstance(web_app, dict) else None
+        if not isinstance(url, str) or not url:
+            return None
+        return url.removesuffix("/healthz").rstrip("/")
+
     async def health(self) -> bool:
         """Return True if the API Server's health endpoint responds OK."""
         try:

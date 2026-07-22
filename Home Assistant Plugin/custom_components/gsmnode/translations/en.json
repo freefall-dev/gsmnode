@@ -44,6 +44,37 @@
       "reauth_successful": "gsmnode was re-authenticated."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "gsmnode sidebar",
+        "description": "Add a gsmnode item to the Home Assistant sidebar, opening one of the gateway's own overviews.\n\nAPI Server panel: {api_base}\nWeb App: {web_app}\n\nLeave the address empty to use the one above for the chosen overview. Set it when Home Assistant, your browser and the API Server disagree about how to reach a service — behind a reverse proxy or a VPN, for instance.",
+        "data": {
+          "panel": "Overview to show",
+          "panel_url": "Address (optional)",
+          "panel_title": "Sidebar title",
+          "panel_require_admin": "Administrators only"
+        },
+        "data_description": {
+          "panel_url": "Must be reachable from the browser, not from Home Assistant. A page served over http cannot be embedded in a Home Assistant served over https.",
+          "panel_title": "The name shown in the sidebar. Give each gateway its own if you have more than one."
+        }
+      }
+    },
+    "error": {
+      "url_required": "A custom overview needs an address."
+    }
+  },
+  "selector": {
+    "panel": {
+      "options": {
+        "none": "No sidebar item",
+        "web_app": "Web App — the full gateway UI",
+        "api_panel": "API Server panel — status and administration",
+        "custom": "Another address"
+      }
+    }
+  },
   "services": {
     "send_sms": {
       "name": "Send SMS",

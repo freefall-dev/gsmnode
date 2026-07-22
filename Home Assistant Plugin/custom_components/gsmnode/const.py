@@ -32,3 +32,19 @@ ATTR_SCHEDULE_AT = "schedule_at"
 # `sims[].slot` the phones report to /api/devices.
 MIN_SIM_SLOT = 0
 MAX_SIM_SLOT = 3
+
+# Sidebar panel options (entry options, edited under Configure).
+CONF_PANEL = "panel"
+CONF_PANEL_URL = "panel_url"
+CONF_PANEL_TITLE = "panel_title"
+CONF_PANEL_ADMIN = "panel_require_admin"
+
+# Which overview the sidebar item opens.
+PANEL_NONE = "none"
+PANEL_WEB_APP = "web_app"
+PANEL_API_PANEL = "api_panel"
+PANEL_CUSTOM = "custom"
+PANEL_CHOICES = [PANEL_NONE, PANEL_WEB_APP, PANEL_API_PANEL, PANEL_CUSTOM]
+
+DEFAULT_PANEL_TITLE = "gsmnode"
+PANEL_ICON = "mdi:message-arrow-right"

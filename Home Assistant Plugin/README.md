@@ -19,6 +19,8 @@ Like every other client, it talks **only** to the API Server (never PocketBase).
 - **Sensors** — a `binary_sensor` "API Server" (is the gateway up?) plus one
   connectivity sensor **per registered phone**, so an automation can react to
   the phone that actually sends your texts dropping off.
+- **Sidebar item** *(optional)* — a **gsmnode** entry in Home Assistant's left
+  menu that opens the Web App or the API Server panel in place. See below.
 - **Branding** — the gsmnode mark and wordmark ship in `brand/`, so the
   integration carries its own icon instead of a puzzle piece (Home Assistant
   **2026.3+**; older versions ignore the folder). The two actions get icons on
@@ -126,6 +128,43 @@ The same trigger shape works on a phone's own sensor (its entity id comes from
 the phone's name) — useful when the API Server is up but the phone that does the
 sending has stopped routing.
 
+## The sidebar item
+
+The gateway already has two full overviews — the Web App and the API Server's
+own panel — so the integration does not reimplement either. It puts an item in
+Home Assistant's sidebar that opens the one you choose, in place, without
+leaving Home Assistant.
+
+Set it up under **Settings → Devices & Services → gsmnode → Configure**:
+
+| Overview to show | Opens |
+|---|---|
+| **No sidebar item** | nothing — the default |
+| **Web App** | the full gateway UI: messages, inbox, devices, webhooks, settings |
+| **API Server panel** | status and administration: users, plugins, connected devices |
+| **Another address** | any URL you give it |
+
+The address is worked out for you: the API Server panel is the URL you signed in
+against, and the Web App's is whatever the API Server reports for it on
+`/api/status` — both shown in the form. Fill the **Address** field in only when
+that is not the address your *browser* needs. The panel is loaded by the
+browser, not by Home Assistant, so a container name or a `localhost` that means
+something different on the two machines has to be overridden here.
+
+**Sidebar title** names the item — worth setting if you run more than one
+gateway — and **Administrators only** hides it from non-admin users. Changing
+any of this reloads the integration and the sidebar updates immediately.
+
+Two limits worth knowing before you wonder why a page is blank:
+
+- A page served over **http cannot be embedded in a Home Assistant served over
+  https**. Browsers block the mixed content and Home Assistant shows an error in
+  place of the frame. Put the gateway behind the same kind of TLS Home Assistant
+  uses, or open it in its own tab.
+- The embedded app keeps **its own login**. Signing in to Home Assistant does
+  not sign you in to the Web App; that session lives in the frame and persists
+  there like it would in a tab.
+
 ## Receiving SMS in Home Assistant
 
 To **receive** incoming texts, register the API Server's `sms:received` webhook
@@ -151,6 +190,10 @@ UI integration above is recommended.
   is the sensor's whole job.
 - All HTTP uses Home Assistant's shared aiohttp session (fully async), with a
   15s timeout per request.
+- The sidebar item is an iframe panel (`frontend.async_register_built_in_panel`)
+  registered when the entry loads and removed when it unloads. Nothing is
+  proxied through Home Assistant — the browser fetches the page straight from
+  the gateway.
 
 ## Brand assets
 
