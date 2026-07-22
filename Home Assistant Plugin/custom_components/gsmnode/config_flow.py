@@ -50,6 +50,8 @@ from .const import (
     bus_event,
 )
 from .panel import async_resolve_panel_url
+from .services import resolve_device_id
+from .sims import sim_options
 
 PASSWORD_SELECTOR = selector.TextSelector(
     selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
@@ -117,12 +119,18 @@ TARGET_SCHEMA = vol.Schema(
         vol.Optional(CONF_DEVICE): selector.DeviceSelector(
             selector.DeviceSelectorConfig(integration=DOMAIN)
         ),
+        vol.Optional(CONF_SUBJECT): str,
+    }
+)
+
+# Only reached when no phone has reported its SIMs — see _sim_schema.
+SIM_FALLBACK_SCHEMA = vol.Schema(
+    {
         vol.Optional(CONF_SIM_NUMBER): selector.NumberSelector(
             selector.NumberSelectorConfig(
                 min=MIN_SIM_SLOT, max=MAX_SIM_SLOT, mode=selector.NumberSelectorMode.BOX
             )
         ),
-        vol.Optional(CONF_SUBJECT): str,
     }
 )
 
@@ -354,36 +362,108 @@ class NotificationTargetSubentryFlow(ConfigSubentryFlow):
     One entity per target is what makes the choices stick: a notify entity is
     called with a message and nothing else, so who it reaches, how (SMS, MMS or
     a call), from which phone and on which SIM all have to be decided here.
+
+    Two steps, because the SIMs on offer depend on the phone chosen in the
+    first: the phones report their own slots, carriers and numbers, and picking
+    from that beats guessing a slot index.
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._target: dict[str, Any] = {}
+        self._editing = False
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Add a target."""
+        """Name the target and say what it sends, to whom, from which phone."""
         if user_input is not None:
-            return self.async_create_entry(
-                title=user_input[CONF_NAME], data=_clean_target(user_input)
-            )
+            self._target = dict(user_input)
+            return await self.async_step_sim()
         return self.async_show_form(step_id="user", data_schema=TARGET_SCHEMA)
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Edit an existing target."""
+        """Same, for a target that already exists."""
+        self._editing = True
         subentry = self._get_reconfigure_subentry()
         if user_input is not None:
-            return self.async_update_and_abort(
-                self._get_entry(),
-                subentry,
-                title=user_input[CONF_NAME],
-                data=_clean_target(user_input),
-            )
+            self._target = dict(user_input)
+            return await self.async_step_sim()
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
                 TARGET_SCHEMA, {CONF_NAME: subentry.title, **subentry.data}
             ),
         )
+
+    async def async_step_sim(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Choose which SIM the target sends from."""
+        if user_input is not None:
+            data = _clean_target({**self._target, **user_input})
+            if self._editing:
+                return self.async_update_and_abort(
+                    self._get_entry(),
+                    self._get_reconfigure_subentry(),
+                    title=data[CONF_NAME],
+                    data=data,
+                )
+            return self.async_create_entry(title=data[CONF_NAME], data=data)
+
+        current = None
+        if self._editing:
+            current = self._get_reconfigure_subentry().data.get(CONF_SIM_NUMBER)
+        schema, placeholders = self._sim_schema(current)
+        return self.async_show_form(
+            step_id="sim", data_schema=schema, description_placeholders=placeholders
+        )
+
+    def _sim_schema(self, current: int | None) -> tuple[vol.Schema, dict[str, str]]:
+        """Build the SIM step from what the phones have actually reported.
+
+        Falls back to a plain slot number when nothing is known — a phone that
+        has never been granted READ_PHONE_STATE reports no SIMs at all, and a
+        dropdown with nothing in it would be a dead end.
+        """
+        options = self._sim_options()
+        if not options:
+            return SIM_FALLBACK_SCHEMA, {"sims": "no SIMs reported yet"}
+
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_SIM_NUMBER): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=options, mode=selector.SelectSelectorMode.LIST
+                    )
+                )
+            }
+        )
+        if current is not None:
+            schema = self.add_suggested_values_to_schema(
+                schema, {CONF_SIM_NUMBER: str(current)}
+            )
+        return schema, {"sims": ", ".join(option["label"] for option in options)}
+
+    def _sim_options(self) -> list[selector.SelectOptionDict]:
+        """The SIMs to offer, narrowed to the chosen phone where there is one."""
+        return [
+            selector.SelectOptionDict(value=value, label=label)
+            for value, label in sim_options(
+                self._gateway_devices(),
+                resolve_device_id(self.hass, self._target.get(CONF_DEVICE)),
+            )
+        ]
+
+    def _gateway_devices(self) -> list[dict[str, Any]]:
+        """The phones this gateway knows about, or none if it is not loaded."""
+        entry = self._get_entry()
+        coordinator = getattr(entry, "runtime_data", None)
+        if coordinator is None or coordinator.data is None:
+            return []
+        return [d for d in coordinator.data.devices if isinstance(d, dict)]
 
 
 def _clean_target(user_input: dict[str, Any]) -> dict[str, Any]:
@@ -398,6 +478,8 @@ def _clean_target(user_input: dict[str, Any]) -> dict[str, Any]:
         for number in user_input.get(CONF_RECIPIENTS) or []
         if number.strip()
     ]
+    # The SIM arrives as the option's value (a string) from the list, or as a
+    # float from the fallback number box.
     if (sim := data.get(CONF_SIM_NUMBER)) is not None:
-        data[CONF_SIM_NUMBER] = int(sim)  # the number selector hands back a float
+        data[CONF_SIM_NUMBER] = int(sim)
     return data

@@ -116,6 +116,13 @@ data:
 Attachments are read off disk, so each path has to be under an
 `allowlist_external_dirs` directory, and each file at most 1 MB.
 
+`sim_number` here is a **slot index**, not a picker. Action fields come from a
+static `services.yaml` that Home Assistant reads once for every install, so it
+cannot list SIMs that differ per gateway and per phone — only a config flow can
+do that, which is why notification targets get the real list. To see which slot
+is which, open a phone's connectivity sensor: its attributes carry the same
+`slot`, `carrier` and `number` the picker uses.
+
 ### Short forms
 
 ```yaml
@@ -273,7 +280,7 @@ appear on the integration's page under **Add notification target**:
 | **Send as** | SMS, MMS, or a call that rings the recipients |
 | **Recipients** | every message to this target goes to all of them |
 | **Phone** | which gateway phone sends it, from a picker |
-| **SIM slot** | 0-based; works for calls as well as messages |
+| **SIM** | picked from the phone's actual SIMs — carrier and number, not a slot index |
 | **MMS subject** | used when nothing passes a title with the message |
 
 ```yaml
@@ -284,8 +291,19 @@ data:
   message: "Washing machine finished"
 ```
 
+The SIM is a second step, because what it can offer depends on the phone chosen
+in the first. The phones report their own SIMs on every heartbeat — slot,
+carrier, number — so the list reads *SIM 1 (slot 0) — Orange · +48555111222*
+rather than asking for a slot index. Leave it empty for the phone's default SIM.
+
+Two things make that list empty, and both fall back to typing a slot number: a
+phone that has not been granted the phone permission reports no SIMs at all, and
+a gateway that is unreachable has nothing to report. With no phone chosen, every
+phone's SIMs are offered, collapsed by slot — the stored value is the slot, so
+two phones' "SIM 1" is one choice that names both.
+
 Each target gets its own device and entity, so an alert can text the family from
-SIM 0 while an escalation rings the on-call phone from the other one. Editing a
+one SIM while an escalation rings the on-call phone from the other. Editing a
 target — or deleting it — is on the same page. An MMS target accepts a `title:`
 and sends it as the subject.
 
@@ -317,6 +335,10 @@ the same fields as arguments.
   same commit — older ones accept the field and ignore it.
 - MMS attachments are read in an executor, checked against
   `allowlist_external_dirs`, capped at 1 MB each, and base64'd into the request.
+- The SIM list is built from `GET /api/devices`, which the coordinator already
+  polls. The logic lives in `sims.py`, kept free of Home Assistant imports so
+  `tests/test_sims.py` can exercise it with plain Python:
+  `python -m unittest discover tests`.
 - Incoming events use Home Assistant's own webhook component. The id is minted
   once per entry and stored with it, the URL is `GET`-proof (`POST` only), and
   each delivery is re-fired on the bus. Subscriptions on the gateway are

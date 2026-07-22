@@ -1,7 +1,7 @@
 {
   "domain": "gsmnode",
   "name": "gsmnode",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "config_flow": true,
   "documentation": "http://10.2.1.10:3104/FreeFallDev/GsmNode",
   "issue_tracker": "http://10.2.1.10:3104/FreeFallDev/GsmNode/issues",

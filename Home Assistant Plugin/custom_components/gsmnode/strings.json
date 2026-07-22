@@ -269,20 +269,18 @@
       "step": {
         "user": {
           "title": "Add notification target",
-          "description": "A target becomes its own notify entity, so everything it cannot be told per message is decided here: what to send, to whom, from which phone and SIM.\n\nAdd one per combination you need — texts to the family, a call to the on-call phone, an MMS from the other SIM.",
+          "description": "A target becomes its own notify entity, so everything it cannot be told per message is decided here: what to send, to whom, and from which phone.\n\nThe SIM comes next — the phones report their own, so you pick from the list rather than guessing a slot number.",
           "data": {
             "name": "Name",
             "type": "Send as",
             "recipients": "Recipients",
             "device": "Phone",
-            "sim_number": "SIM slot",
             "subject": "MMS subject"
           },
           "data_description": {
             "name": "Names the entity, e.g. \"Alerts\" gives notify.alerts.",
             "recipients": "Every message to this target goes to all of these.",
             "device": "Which gateway phone sends it. Leave empty for the gateway's own choice.",
-            "sim_number": "Counting from 0. Leave empty for the phone's default SIM.",
             "subject": "Used when nothing passes a title with the message."
           }
         },
@@ -294,8 +292,17 @@
             "type": "Send as",
             "recipients": "Recipients",
             "device": "Phone",
-            "sim_number": "SIM slot",
             "subject": "MMS subject"
+          }
+        },
+        "sim": {
+          "title": "Which SIM",
+          "description": "Available SIMs: {sims}\n\nLeave it empty to let the phone use its default SIM. A phone only reports its SIMs once it has been granted the phone permission, so an empty list means a slot number typed by hand is the only option.",
+          "data": {
+            "sim_number": "SIM"
+          },
+          "data_description": {
+            "sim_number": "Used for calls as well as messages."
           }
         }
       },
