@@ -32,9 +32,6 @@ services:
       # Superuser (also used by the API Server to authenticate to PocketBase).
       PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:?set PB_ADMIN_EMAIL in .env}"
       PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:?set PB_ADMIN_PASSWORD in .env}"
-      # Secret used to sign client JWTs. REQUIRED — use a long random string.
-      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env}"
-      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
       MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
       # Match CORS to the web origin (only used if a browser calls the API directly).
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:8090}"

@@ -24,9 +24,6 @@ services:
       # server still starts, but PocketBase calls fail.
       PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL}"
       PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD}"
-      # Secret used to sign client JWTs — set a long random string in production.
-      JWT_SECRET: "${JWT_SECRET:-dev-insecure-change-me-please}"
-      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
       # How long a message/call may stay unprocessed before it's marked Failed.
       MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
       # Browser origins allowed by CORS (native apps are exempt).

@@ -18,8 +18,6 @@ type Config struct {
 	PocketBaseURL string
 	PBAdminEmail  string
 	PBAdminPass   string
-	JWTSecret     []byte
-	JWTAccessTTL  time.Duration
 	WebAppURL     string
 	AllowOrigins  []string
 	MessageTTL    time.Duration
@@ -52,8 +50,6 @@ func Load() Config {
 		PocketBaseURL: strings.TrimRight(getenv("POCKETBASE_URL", "http://localhost:8028"), "/"),
 		PBAdminEmail:  getenv("PB_ADMIN_EMAIL", ""),
 		PBAdminPass:   getenv("PB_ADMIN_PASSWORD", ""),
-		JWTSecret:     []byte(getenv("JWT_SECRET", "dev-insecure-change-me-please")),
-		JWTAccessTTL:  getdur("JWT_ACCESS_TTL", 24*time.Hour),
 		WebAppURL:     strings.TrimRight(getenv("WEBAPP_URL", "http://localhost:8090"), "/"),
 		AllowOrigins:  splitCSV(getenv("CORS_ALLOW_ORIGINS", "*")),
 		MessageTTL:    getdur("MESSAGE_TTL", 5*time.Minute),

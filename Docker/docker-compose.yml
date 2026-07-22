@@ -42,9 +42,6 @@ services:
       POCKETBASE_URL: "http://pocketbase:8070"
       PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL}"
       PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD}"
-      # Secret used to sign client JWTs — set a long random string in production.
-      JWT_SECRET: "${JWT_SECRET:-dev-insecure-change-me-please}"
-      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
       MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
       # Same-origin requests go through the Web App BFF, so CORS is only needed
       # if the browser ever calls the API Server directly. Default to the web origin.

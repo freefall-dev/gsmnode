@@ -12,7 +12,6 @@
 #   docker run -d --name gsmnode -p 80:80 -p 8070:8070 \
 #     -e PB_ADMIN_EMAIL=admin@example.com \
 #     -e PB_ADMIN_PASSWORD=change-me \
-#     -e JWT_SECRET=change-me-to-a-long-random-string \
 #     -e GSMNODE_SUPERADMIN_EMAIL=owner@example.com \
 #     -e GSMNODE_SUPERADMIN_PASSWORD=change-me \
 #     -v gsmnode_pb:/pb/pb_data \
@@ -172,15 +171,14 @@ SUPERVISOR
 # API Server config: everything is local to this container.
 ENV API_ADDR=:8080 \
     POCKETBASE_URL=http://127.0.0.1:8070 \
-    JWT_ACCESS_TTL=24h \
     MESSAGE_TTL=5m \
     CORS_ALLOW_ORIGINS=http://localhost:8090 \
     PB_BOOTSTRAP=true \
     PLUGINS_FILE=/data/plugins.json \
     WEBAPP_URL=http://127.0.0.1:80
 
-# Required at runtime (no safe defaults): PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD, and
-# JWT_SECRET (a long random string). Pass them with `docker run -e ...`.
+# Required at runtime (no safe defaults): PB_ADMIN_EMAIL and PB_ADMIN_PASSWORD.
+# Pass them with `docker run -e ...`.
 # Optional: GSMNODE_SUPERADMIN_EMAIL / GSMNODE_SUPERADMIN_PASSWORD create the
 # first app super-admin on boot; PB_BOOTSTRAP=false skips schema setup.
 

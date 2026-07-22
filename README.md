@@ -95,7 +95,7 @@ cd gsmnode
 2. **API Server** (`:8080`):
    ```powershell
    cd "API Server"
-   Copy-Item .env.example .env   # set POCKETBASE_URL, PB_ADMIN_* and JWT_SECRET
+   Copy-Item .env.example .env   # set POCKETBASE_URL and PB_ADMIN_*
    node scripts/setup-pocketbase.mjs           # one-time schema setup
    node scripts/create-user.mjs you@example.com "password" "Your Name"
    ./scripts/Run-ApiServer.ps1
@@ -140,7 +140,7 @@ To build from this tree:
 ```powershell
 cd Docker                      # or "Docker AIO"
 Copy-Item .env.example .env
-# edit .env: PB_ADMIN_*, GSMNODE_SUPERADMIN_* and JWT_SECRET at minimum
+# edit .env: PB_ADMIN_* and GSMNODE_SUPERADMIN_* at minimum
 docker compose up -d --build
 ```
 
@@ -151,7 +151,7 @@ so this works without cloning the repository:
 ```powershell
 cd Docker
 Copy-Item .env.prod.example .env
-# edit .env: PB_ADMIN_*, GSMNODE_SUPERADMIN_* and JWT_SECRET at minimum
+# edit .env: PB_ADMIN_* and GSMNODE_SUPERADMIN_* at minimum
 docker compose -f docker-compose.prod.yml up -d
 ```
 

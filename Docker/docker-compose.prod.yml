@@ -57,9 +57,6 @@ services:
       POCKETBASE_URL: "http://pocketbase:8070"
       PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL}"
       PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD}"
-      # Secret used to sign client JWTs — REQUIRED in production (long random string).
-      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env}"
-      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-24h}"
       MESSAGE_TTL: "${MESSAGE_TTL:-5m}"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:8090}"
       # The panel's overview probes WEBAPP_URL/healthz for the Web App's health.

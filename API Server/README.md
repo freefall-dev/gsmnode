@@ -37,7 +37,7 @@ For panel development with hot reload (proxies `/api` to a running server on
 
 ```powershell
 Copy-Item .env.example .env
-# edit .env: set PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD, and a strong JWT_SECRET
+# edit .env: set POCKETBASE_URL, PB_ADMIN_EMAIL and PB_ADMIN_PASSWORD
 ```
 
 | Variable | Purpose | Default |
@@ -45,8 +45,6 @@ Copy-Item .env.example .env
 | `API_ADDR` | Listen address | `:8080` |
 | `POCKETBASE_URL` | PocketBase base URL | `http://localhost:8028` |
 | `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD` | PocketBase superuser login | — (required) |
-| `JWT_SECRET` | Signs client JWTs | dev placeholder |
-| `JWT_ACCESS_TTL` | Access-token lifetime | `24h` |
 | `MESSAGE_TTL` | How long a message may stay unprocessed before the sweeper fails it | `5m` |
 | `CORS_ALLOW_ORIGINS` | Comma list, or `*` | `*` |
 | `WEBAPP_URL` | Probed at `/healthz` for the Web App health on the panel | `http://localhost:8090` |
@@ -112,6 +110,12 @@ the container is recreated.
   Used by the Web App and integrators.
 - **Mobile API** (`/api/mobile/...`): `Authorization: Bearer <device_token>`
   returned by device registration. Used by the Phone Agent.
+
+The client token is **PocketBase's own** — login is a proxy, and the server never
+mints or signs one of its own, so there is no signing secret or token lifetime to
+configure here. Lifetime and revocation are PocketBase's to decide. Device tokens
+are the exception: those are opaque random strings issued by this server
+(`internal/auth`), not JWTs.
 
 ### Client / 3rd-party endpoints
 
@@ -276,7 +280,7 @@ curl -s -X POST http://localhost:8080/api/mobile/v1/device `
 cmd/server/main.go          entry point, wiring, graceful shutdown
 internal/config             env/.env configuration
 internal/pb                 PocketBase REST client (superuser)
-internal/auth               JWT issue/verify, device token generation
+internal/auth               device token generation
 internal/bootstrap          schema + super-admin reconcile on boot
 internal/api                router, middleware, handlers
   dist/                     built panel (generated; embedded at compile time)
