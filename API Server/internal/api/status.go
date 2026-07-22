@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"io"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -17,8 +18,17 @@ type svcHealth struct {
 	Status     string `json:"status"` // ok | error | unreachable
 	URL        string `json:"url,omitempty"`
 	HTTPStatus int    `json:"httpStatus,omitempty"`
-	LatencyMs  int64  `json:"latencyMs,omitempty"`
-	Error      string `json:"error,omitempty"`
+	// Fractional, and a pointer so an absent measurement (this process) stays
+	// distinguishable from a genuinely fast one: neighbours sharing a Docker
+	// network answer in well under a millisecond.
+	LatencyMs *float64 `json:"latencyMs,omitempty"`
+	Error     string   `json:"error,omitempty"`
+}
+
+// latencyMs is elapsed time in milliseconds, kept to one decimal.
+func latencyMs(d time.Duration) *float64 {
+	ms := math.Round(float64(d.Microseconds())/100) / 10
+	return &ms
 }
 
 // probe issues a GET against url and classifies the result.
@@ -32,7 +42,7 @@ func probe(ctx context.Context, url string) svcHealth {
 	}
 	start := time.Now()
 	resp, err := healthClient.Do(req)
-	h.LatencyMs = time.Since(start).Milliseconds()
+	h.LatencyMs = latencyMs(time.Since(start))
 	if err != nil {
 		h.Status = "unreachable"
 		h.Error = err.Error()

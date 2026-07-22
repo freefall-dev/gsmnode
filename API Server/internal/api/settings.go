@@ -16,11 +16,11 @@ import (
 // URL answers its health check and whether the service-account credentials
 // authenticate as a superuser.
 type pbProbe struct {
-	Reachable  bool   `json:"reachable"`
-	HTTPStatus int    `json:"httpStatus,omitempty"`
-	LatencyMs  int64  `json:"latencyMs,omitempty"`
-	Superuser  bool   `json:"superuser"`
-	Detail     string `json:"detail,omitempty"`
+	Reachable  bool     `json:"reachable"`
+	HTTPStatus int      `json:"httpStatus,omitempty"`
+	LatencyMs  *float64 `json:"latencyMs,omitempty"`
+	Superuser  bool     `json:"superuser"`
+	Detail     string   `json:"detail,omitempty"`
 }
 
 // pbConfigView is the PocketBase-connection shape returned to the panel. The
