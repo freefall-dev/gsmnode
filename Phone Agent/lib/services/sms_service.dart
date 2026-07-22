@@ -156,8 +156,13 @@ class SmsService {
   }
 
   /// Places a phone call to [phoneNumber]. Requires the CALL_PHONE permission.
-  Future<void> placeCall(String phoneNumber) async {
-    await _method.invokeMethod('placeCall', {'phone': phoneNumber});
+  ///
+  /// [simSlot] dials through that SIM's calling account; null leaves the choice
+  /// to the phone. A slot that can't be resolved falls back to the default
+  /// account rather than failing the call — see SmsBridge.placeCall.
+  Future<void> placeCall(String phoneNumber, {int? simSlot}) async {
+    await _method
+        .invokeMethod('placeCall', {'phone': phoneNumber, 'simSlot': simSlot});
   }
 
   Future<void> startBackgroundService() => _method.invokeMethod('startService');

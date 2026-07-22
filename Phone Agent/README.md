@@ -212,6 +212,12 @@ heartbeat, so the Web App / API can offer real slot choices.
   A message with no `sim_number` uses the device's default SIM.
 - **Incoming SMS:** the receiver records which slot a message arrived on and
   forwards it as `sim_slot` to the inbox.
+- **Calling from a specific SIM:** a call message's `sim_number` selects the
+  calling account handed to `TelecomManager.placeCall`. Telephony accounts are
+  keyed by subscription id, so the slot is resolved to a subscription exactly as
+  a send does. Unlike a send, an unresolvable slot is **not** fatal: the call
+  still goes out on the phone's default account. Reaching somebody matters more
+  than the SIM it left on, and a call carries no per-message cost surprise.
 
 ## Known next steps (not yet implemented)
 

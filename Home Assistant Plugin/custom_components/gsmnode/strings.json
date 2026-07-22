@@ -48,11 +48,10 @@
     "step": {
       "init": {
         "title": "gsmnode",
-        "description": "What would you like to set up?",
+        "description": "What would you like to set up?\n\nNotification targets live on the integration's page, under \"Add notification target\".",
         "menu_options": {
           "panel": "Sidebar item — show an overview inside Home Assistant",
-          "events": "Incoming events — hear about SMS, calls and delivery reports",
-          "notify": "Notify entity — a fixed set of numbers to text"
+          "events": "Incoming events — hear about SMS, calls and delivery reports"
         }
       },
       "panel": {
@@ -78,13 +77,6 @@
         },
         "data_description": {
           "callback_url": "Where the gateway should reach Home Assistant, if that differs from the address Home Assistant knows itself by. Just the base, e.g. http://10.2.1.20:8123 — the webhook path is added for you."
-        }
-      },
-      "notify": {
-        "title": "Notify entity",
-        "description": "Give one or more numbers to create a notify entity that texts them. It exists so alerts, blueprints and scripts that only know notify.send_message can reach the gateway; a notify entity has no recipient field of its own.\n\nFor anything that needs to choose recipients, a device or a SIM per message, use the gsmnode.send_sms action instead. Leave this empty to have no notify entity.",
-        "data": {
-          "recipients": "Recipients"
         }
       }
     },
@@ -114,36 +106,202 @@
         "call:sent": "Call placed",
         "call:failed": "Call failed"
       }
+    },
+    "message_type": {
+      "options": {
+        "sms": "SMS — a text message",
+        "mms": "MMS — text with a subject and attachments",
+        "call": "Call — ring the number"
+      }
     }
   },
   "services": {
+    "send": {
+      "name": "Send",
+      "description": "Send an SMS or MMS, or place a call, choosing how it goes out.",
+      "fields": {
+        "type": {
+          "name": "Type",
+          "description": "What to send."
+        },
+        "phone_numbers": {
+          "name": "Phone numbers",
+          "description": "One or more recipients. A call is placed to each in turn."
+        },
+        "message": {
+          "name": "Message",
+          "description": "The text to send. Required for an SMS, optional on an MMS with an attachment, ignored for a call."
+        },
+        "subject": {
+          "name": "Subject",
+          "description": "MMS subject line."
+        },
+        "attachments": {
+          "name": "Attachments",
+          "description": "Files to send with an MMS, by path. Each must be under an allowed directory and at most 1 MB."
+        },
+        "device": {
+          "name": "Phone",
+          "description": "Which gateway phone sends it."
+        },
+        "sim_number": {
+          "name": "SIM slot",
+          "description": "Which SIM to send or dial from, counting from 0."
+        },
+        "schedule_at": {
+          "name": "Send at",
+          "description": "Hold the message until this time instead of sending it now."
+        },
+        "config_entry_id": {
+          "name": "Gateway",
+          "description": "Which gsmnode gateway to send through. Only needed when more than one is configured."
+        },
+        "device_id": {
+          "name": "Phone (by gateway id)",
+          "description": "Alternative to Phone, naming the gateway's own device ID."
+        }
+      }
+    },
     "send_sms": {
       "name": "Send SMS",
       "description": "Send an SMS through the gateway.",
       "fields": {
-        "config_entry_id": { "name": "Gateway", "description": "Which gsmnode gateway to send through. Only needed when more than one is configured." },
-        "phone_numbers": { "name": "Phone numbers", "description": "One or more recipient phone numbers." },
-        "message": { "name": "Message", "description": "The text to send." },
-        "device_id": { "name": "Phone", "description": "Gateway phone to send from, by its device ID." },
-        "sim_number": { "name": "SIM slot", "description": "Which SIM to send on, counting from 0. Leave empty for the phone's default SIM." },
-        "schedule_at": { "name": "Send at", "description": "Hold the message until this time instead of sending it now." }
+        "config_entry_id": {
+          "name": "Gateway",
+          "description": "Which gsmnode gateway to send through. Only needed when more than one is configured."
+        },
+        "phone_numbers": {
+          "name": "Phone numbers",
+          "description": "One or more recipient phone numbers."
+        },
+        "message": {
+          "name": "Message",
+          "description": "The text to send."
+        },
+        "device_id": {
+          "name": "Phone (by gateway id)",
+          "description": "Alternative to Phone, naming the gateway's own device ID."
+        },
+        "sim_number": {
+          "name": "SIM slot",
+          "description": "Which SIM to send on, counting from 0. Leave empty for the phone's default SIM."
+        },
+        "schedule_at": {
+          "name": "Send at",
+          "description": "Hold the message until this time instead of sending it now."
+        },
+        "device": {
+          "name": "Phone",
+          "description": "Which gateway phone handles it."
+        }
       }
     },
     "call": {
       "name": "Place call",
       "description": "Tell a gateway phone to place an outbound call.",
       "fields": {
-        "config_entry_id": { "name": "Gateway", "description": "Which gsmnode gateway to call through. Only needed when more than one is configured." },
-        "phone_number": { "name": "Phone number", "description": "The number to call." },
-        "device_id": { "name": "Phone", "description": "Gateway phone to call from, by its device ID." }
+        "config_entry_id": {
+          "name": "Gateway",
+          "description": "Which gsmnode gateway to call through. Only needed when more than one is configured."
+        },
+        "phone_number": {
+          "name": "Phone number",
+          "description": "The number to call."
+        },
+        "device_id": {
+          "name": "Phone (by gateway id)",
+          "description": "Alternative to Phone, naming the gateway's own device ID."
+        },
+        "device": {
+          "name": "Phone",
+          "description": "Which gateway phone handles it."
+        },
+        "sim_number": {
+          "name": "SIM slot",
+          "description": "Which SIM to dial from, counting from 0."
+        }
       }
     }
   },
   "exceptions": {
-    "no_gateway": { "message": "No gsmnode gateway is set up. Add the integration first." },
-    "ambiguous_gateway": { "message": "More than one gsmnode gateway is set up. Say which one to use in the Gateway field." },
-    "entry_not_loaded": { "message": "The gsmnode gateway {entry_id} is unknown or not loaded." },
-    "auth_failed": { "message": "The API Server rejected the gsmnode credentials: {error}" },
-    "request_failed": { "message": "The gsmnode API Server did not accept the request: {error}" }
+    "no_gateway": {
+      "message": "No gsmnode gateway is set up. Add the integration first."
+    },
+    "ambiguous_gateway": {
+      "message": "More than one gsmnode gateway is set up. Say which one to use in the Gateway field."
+    },
+    "entry_not_loaded": {
+      "message": "The gsmnode gateway {entry_id} is unknown or not loaded."
+    },
+    "auth_failed": {
+      "message": "The API Server rejected the gsmnode credentials: {error}"
+    },
+    "request_failed": {
+      "message": "The gsmnode API Server did not accept the request: {error}"
+    },
+    "message_required": {
+      "message": "An SMS needs a message."
+    },
+    "mms_empty": {
+      "message": "An MMS needs a message or at least one attachment."
+    },
+    "unknown_device": {
+      "message": "No such device: {device}."
+    },
+    "path_not_allowed": {
+      "message": "{path} is not in an allowed directory. Add its folder to allowlist_external_dirs."
+    },
+    "attachment_missing": {
+      "message": "No such file: {path}."
+    },
+    "attachment_too_big": {
+      "message": "{path} is larger than {limit} kB, too big to send as an MMS."
+    }
+  },
+  "config_subentries": {
+    "target": {
+      "title": "Notification target",
+      "initiate_flow": {
+        "user": "Add notification target",
+        "reconfigure": "Edit notification target"
+      },
+      "entry_type": "Notification target",
+      "step": {
+        "user": {
+          "title": "Add notification target",
+          "description": "A target becomes its own notify entity, so everything it cannot be told per message is decided here: what to send, to whom, from which phone and SIM.\n\nAdd one per combination you need — texts to the family, a call to the on-call phone, an MMS from the other SIM.",
+          "data": {
+            "name": "Name",
+            "type": "Send as",
+            "recipients": "Recipients",
+            "device": "Phone",
+            "sim_number": "SIM slot",
+            "subject": "MMS subject"
+          },
+          "data_description": {
+            "name": "Names the entity, e.g. \"Alerts\" gives notify.alerts.",
+            "recipients": "Every message to this target goes to all of these.",
+            "device": "Which gateway phone sends it. Leave empty for the gateway's own choice.",
+            "sim_number": "Counting from 0. Leave empty for the phone's default SIM.",
+            "subject": "Used when nothing passes a title with the message."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit notification target",
+          "description": "Change what this target sends, and where it goes.",
+          "data": {
+            "name": "Name",
+            "type": "Send as",
+            "recipients": "Recipients",
+            "device": "Phone",
+            "sim_number": "SIM slot",
+            "subject": "MMS subject"
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "The notification target was updated."
+      }
+    }
   }
 }

@@ -186,8 +186,9 @@ class GatewayService extends ChangeNotifier {
         for (final phone in recipients) {
           try {
             if (m.isCall) {
-              await sms.placeCall(phone);
-              _log0('Calling $phone');
+              await sms.placeCall(phone, simSlot: m.simNumber);
+              final on = m.simNumber != null ? ' on SIM ${m.simNumber}' : '';
+              _log0('Calling $phone$on');
             } else if (m.isData) {
               await sms.sendDataSms(phone, m.dataPayload, m.dataPort ?? 0,
                   simSlot: m.simNumber, messageId: m.id);

@@ -9,10 +9,12 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    ConfigSubentryFlow,
     OptionsFlow,
+    SubentryFlowResult,
 )
 from homeassistant.components import webhook
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.const import CONF_EMAIL, CONF_NAME, CONF_PASSWORD, CONF_TYPE
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
@@ -20,6 +22,7 @@ from .client import GsmNodeAuthError, GsmNodeClient, GsmNodeError
 from .const import (
     CONF_API_BASE,
     CONF_CALLBACK_URL,
+    CONF_DEVICE,
     CONF_DEVICE_ID,
     CONF_EVENTS,
     CONF_PANEL,
@@ -27,15 +30,22 @@ from .const import (
     CONF_PANEL_TITLE,
     CONF_PANEL_URL,
     CONF_RECIPIENTS,
+    CONF_SIM_NUMBER,
+    CONF_SUBJECT,
     CONF_WEBHOOK_ID,
     DEFAULT_API_BASE,
     DEFAULT_EVENTS,
     DEFAULT_PANEL_TITLE,
     DOMAIN,
+    MAX_SIM_SLOT,
+    MESSAGE_TYPES,
+    MIN_SIM_SLOT,
+    MSG_TYPE_SMS,
     PANEL_CHOICES,
     PANEL_CUSTOM,
     PANEL_NONE,
     PANEL_WEB_APP,
+    SUBENTRY_TARGET,
     WEBHOOK_EVENTS,
     bus_event,
 )
@@ -89,13 +99,30 @@ EVENTS_SCHEMA = vol.Schema(
     }
 )
 
-NOTIFY_SCHEMA = vol.Schema(
+TARGET_SCHEMA = vol.Schema(
     {
-        vol.Optional(CONF_RECIPIENTS, default=list): selector.TextSelector(
+        vol.Required(CONF_NAME): str,
+        vol.Required(CONF_TYPE, default=MSG_TYPE_SMS): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=MESSAGE_TYPES,
+                mode=selector.SelectSelectorMode.LIST,
+                translation_key="message_type",
+            )
+        ),
+        vol.Required(CONF_RECIPIENTS): selector.TextSelector(
             selector.TextSelectorConfig(
                 type=selector.TextSelectorType.TEL, multiple=True
             )
         ),
+        vol.Optional(CONF_DEVICE): selector.DeviceSelector(
+            selector.DeviceSelectorConfig(integration=DOMAIN)
+        ),
+        vol.Optional(CONF_SIM_NUMBER): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=MIN_SIM_SLOT, max=MAX_SIM_SLOT, mode=selector.NumberSelectorMode.BOX
+            )
+        ),
+        vol.Optional(CONF_SUBJECT): str,
     }
 )
 
@@ -108,8 +135,16 @@ class GsmNodeConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> GsmNodeOptionsFlow:
-        """Return the options flow, which is where the sidebar panel is set up."""
+        """Return the options flow: the sidebar panel and incoming events."""
         return GsmNodeOptionsFlow()
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Notification targets are added and edited as subentries."""
+        return {SUBENTRY_TARGET: NotificationTargetSubentryFlow}
 
     async def _async_validate(self, data: dict[str, Any]) -> str | None:
         """Log in with these settings; returns an error key, or None on success."""
@@ -227,10 +262,12 @@ class GsmNodeOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Offer the three sections."""
-        return self.async_show_menu(
-            step_id="init", menu_options=["panel", "events", "notify"]
-        )
+        """Offer the two sections.
+
+        Notification targets are not here: they are subentries, added from the
+        integration's own page with the button Home Assistant puts there.
+        """
+        return self.async_show_menu(step_id="init", menu_options=["panel", "events"])
 
     def _save(self, updates: dict[str, Any]) -> ConfigFlowResult:
         """Store one section's settings, leaving the other sections alone."""
@@ -310,21 +347,57 @@ class GsmNodeOptionsFlow(OptionsFlow):
             description_placeholders={"fired": fired},
         )
 
-    async def async_step_notify(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """The numbers the notify entity texts."""
-        if user_input is not None:
-            numbers = [
-                number.strip()
-                for number in user_input.get(CONF_RECIPIENTS) or []
-                if number.strip()
-            ]
-            return self._save({CONF_RECIPIENTS: numbers})
 
+class NotificationTargetSubentryFlow(ConfigSubentryFlow):
+    """Add or edit one notification target — a named notify entity.
+
+    One entity per target is what makes the choices stick: a notify entity is
+    called with a message and nothing else, so who it reaches, how (SMS, MMS or
+    a call), from which phone and on which SIM all have to be decided here.
+    """
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Add a target."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title=user_input[CONF_NAME], data=_clean_target(user_input)
+            )
+        return self.async_show_form(step_id="user", data_schema=TARGET_SCHEMA)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit an existing target."""
+        subentry = self._get_reconfigure_subentry()
+        if user_input is not None:
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                title=user_input[CONF_NAME],
+                data=_clean_target(user_input),
+            )
         return self.async_show_form(
-            step_id="notify",
+            step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                NOTIFY_SCHEMA, user_input or self.config_entry.options
+                TARGET_SCHEMA, {CONF_NAME: subentry.title, **subentry.data}
             ),
         )
+
+
+def _clean_target(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Normalise a target's settings before they are stored."""
+    data = {
+        key: value
+        for key, value in user_input.items()
+        if value not in (None, "", [])
+    }
+    data[CONF_RECIPIENTS] = [
+        number.strip()
+        for number in user_input.get(CONF_RECIPIENTS) or []
+        if number.strip()
+    ]
+    if (sim := data.get(CONF_SIM_NUMBER)) is not None:
+        data[CONF_SIM_NUMBER] = int(sim)  # the number selector hands back a float
+    return data

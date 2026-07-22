@@ -8,6 +8,8 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .const import MSG_TYPE_MMS, MSG_TYPE_SMS
+
 # The API Server normally sits on the LAN; a request that hasn't answered in
 # 15s is a fault worth surfacing rather than one worth waiting out.
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=15)
@@ -134,21 +136,26 @@ class GsmNodeClient:
     def _auth_headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._token}"} if self._token else {}
 
-    async def send_sms(
+    async def send_message(
         self,
+        message_type: str,
         phone_numbers: list[str],
-        message: str,
+        message: str = "",
         device_id: str | None = None,
         sim_number: int | None = None,
         schedule_at: str | None = None,
+        subject: str | None = None,
+        attachments: list[dict[str, str]] | None = None,
     ) -> None:
-        """Queue an outbound SMS.
+        """Queue an outbound SMS or MMS.
 
         `sim_number` is a 0-based SIM slot; omit it to use the phone's default
         SIM. `schedule_at` is an RFC 3339 timestamp the API Server withholds the
-        message until.
+        message until. `subject` and `attachments` are MMS-only — the API Server
+        rejects a body carrying fields its message type does not take.
         """
         payload: dict[str, Any] = {
+            "type": message_type,
             "phone_numbers": phone_numbers,
             "text_message": message,
         }
@@ -158,13 +165,38 @@ class GsmNodeClient:
             payload["sim_number"] = sim_number
         if schedule_at:
             payload["schedule_at"] = schedule_at
+        if message_type == MSG_TYPE_MMS:
+            if subject:
+                payload["subject"] = subject
+            if attachments:
+                payload["attachments"] = attachments
         await self._call("POST", "/api/messages", payload)
 
-    async def place_call(self, phone_number: str, device_id: str | None = None) -> None:
-        """Queue an outbound phone call."""
+    async def send_sms(
+        self,
+        phone_numbers: list[str],
+        message: str,
+        device_id: str | None = None,
+        sim_number: int | None = None,
+        schedule_at: str | None = None,
+    ) -> None:
+        """Queue a plain outbound SMS."""
+        await self.send_message(
+            MSG_TYPE_SMS, phone_numbers, message, device_id, sim_number, schedule_at
+        )
+
+    async def place_call(
+        self,
+        phone_number: str,
+        device_id: str | None = None,
+        sim_number: int | None = None,
+    ) -> None:
+        """Queue an outbound phone call, optionally on a chosen SIM."""
         payload: dict[str, Any] = {"phone_number": phone_number}
         if dev := (device_id or self.device_id):
             payload["device_id"] = dev
+        if sim_number is not None:
+            payload["sim_number"] = sim_number
         await self._call("POST", "/api/calls", payload)
 
     async def async_devices(self) -> list[dict[str, Any]]:

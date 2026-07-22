@@ -124,7 +124,7 @@ the container is recreated.
 | `GET` | `/api/devices` | List your devices |
 | `DELETE` | `/api/devices/{id}` | Remove a device |
 | `POST` | `/api/messages` | Enqueue SMS/data/MMS (see below) |
-| `POST` | `/api/calls` | Enqueue a phone call `{phone_number, device_id?}` |
+| `POST` | `/api/calls` | Enqueue a phone call `{phone_number, device_id?, sim_number?}` |
 | `GET` | `/api/calls` | List the call log (`?direction=incoming\|outgoing`) |
 | `GET` | `/api/messages` | List messages (`?status=&device_id=&type=&page=&per_page=`) |
 | `GET` | `/api/messages/{id}` | Message state |
@@ -190,6 +190,10 @@ know which slots exist before selecting one.
   device sends on that SIM's radio; if the requested slot has no active
   subscription (or `READ_PHONE_STATE` isn't granted) the send is **rejected** and
   reported `Failed` rather than silently going out on the default SIM.
+- **Calls:** `POST /api/calls` takes the same `sim_number`. It is stored on the
+  call message like any other, and the device dials through that SIM's calling
+  account; a slot with no active subscription falls back to the phone's default
+  account rather than failing the call.
 - **Inbound:** received SMS carry `sim_slot` (the 0-based slot they arrived on),
   surfaced on `GET /api/inbox` items and in the `sms:received` webhook payload.
 

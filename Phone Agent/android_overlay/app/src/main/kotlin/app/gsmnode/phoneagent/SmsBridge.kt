@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
@@ -107,12 +108,13 @@ class SmsBridge(private val ctx: Context) {
                 }
                 "placeCall" -> {
                     val phone = call.argument<String>("phone")
+                    val simSlot = call.argument<Int>("simSlot")
                     if (phone.isNullOrBlank()) {
                         result.error("BAD_ARGS", "phone is required", null)
                         return@setMethodCallHandler
                     }
                     try {
-                        placeCall(phone)
+                        placeCall(phone, simSlot)
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("CALL_FAILED", e.message, null)
@@ -246,7 +248,13 @@ class SmsBridge(private val ctx: Context) {
     /// background — a plain startActivity(ACTION_CALL) is blocked by Android's
     /// background-activity-start restrictions in that state. Falls back to
     /// ACTION_CALL only on very old devices without TelecomManager.placeCall.
-    private fun placeCall(phone: String) {
+    ///
+    /// A non-null simSlot dials through that SIM's calling account. Unlike a
+    /// send, a slot that cannot be resolved is *not* fatal: the call still goes
+    /// out on the phone's default account. A call the user placed to reach
+    /// somebody is worth more than the SIM it left on, and unlike an SMS there
+    /// is no per-message cost surprise in getting it wrong.
+    private fun placeCall(phone: String, simSlot: Int?) {
         val uri = Uri.fromParts("tel", phone, null)
         val hasPerm = ContextCompat.checkSelfPermission(
             ctx, Manifest.permission.CALL_PHONE
@@ -257,13 +265,37 @@ class SmsBridge(private val ctx: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val telecom = ctx.getSystemService(TelecomManager::class.java)
             if (telecom != null) {
-                telecom.placeCall(uri, Bundle())
+                val extras = Bundle()
+                phoneAccountFor(telecom, simSlot)?.let {
+                    extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it)
+                }
+                telecom.placeCall(uri, extras)
                 return
             }
         }
         val intent = Intent(Intent.ACTION_CALL, uri)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         ctx.startActivity(intent)
+    }
+
+    /// The calling account belonging to a SIM slot, or null to leave the choice
+    /// to the system.
+    ///
+    /// Telephony accounts are keyed by subscription id — the handle's id is the
+    /// subscription id as a string — so the slot is resolved to a subscription
+    /// first, exactly as a send does. Reading the account list needs
+    /// READ_PHONE_STATE; without it the system asks the user or uses the
+    /// default, which is the same outcome as passing nothing.
+    private fun phoneAccountFor(telecom: TelecomManager, simSlot: Int?): PhoneAccountHandle? {
+        if (simSlot == null || !hasPhoneStatePermission()) return null
+        val sm = ctx.getSystemService(SubscriptionManager::class.java) ?: return null
+        val info = sm.getActiveSubscriptionInfoForSimSlotIndex(simSlot) ?: return null
+        val subId = info.subscriptionId.toString()
+        return try {
+            telecom.callCapablePhoneAccounts.firstOrNull { it.id == subId }
+        } catch (e: SecurityException) {
+            null
+        }
     }
 
     private fun sendSms(phone: String, message: String, simSlot: Int?, messageId: String?) {

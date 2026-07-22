@@ -17,8 +17,16 @@ DEFAULT_NAME = "gsmnode"
 UPDATE_INTERVAL = timedelta(seconds=30)
 
 # Service names registered by the integration.
+SERVICE_SEND = "send"
 SERVICE_SEND_SMS = "send_sms"
 SERVICE_CALL = "call"
+
+# What a send can be. These are the API Server's own `type` values, except
+# "call", which it takes on a separate endpoint.
+MSG_TYPE_SMS = "sms"
+MSG_TYPE_MMS = "mms"
+MSG_TYPE_CALL = "call"
+MESSAGE_TYPES = [MSG_TYPE_SMS, MSG_TYPE_MMS, MSG_TYPE_CALL]
 
 # Service fields.
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
@@ -26,8 +34,12 @@ ATTR_PHONE_NUMBERS = "phone_numbers"
 ATTR_PHONE_NUMBER = "phone_number"
 ATTR_MESSAGE = "message"
 ATTR_DEVICE_ID = "device_id"
+ATTR_DEVICE = "device"
 ATTR_SIM_NUMBER = "sim_number"
 ATTR_SCHEDULE_AT = "schedule_at"
+ATTR_TYPE = "type"
+ATTR_SUBJECT = "subject"
+ATTR_ATTACHMENTS = "attachments"
 
 # SIM slots are 0-based on the wire — slot 0 is the first SIM — matching the
 # `sims[].slot` the phones report to /api/devices.
@@ -82,5 +94,12 @@ def bus_event(event: str) -> str:
     return f"{EVENT_PREFIX}_{event.replace(':', '_').replace('-', '_')}"
 
 
-# Notify entity (entry options): the numbers notify.send_message texts.
+# Notification targets. Each is a subentry — a named thing the user adds under
+# the integration — and becomes one notify entity, so several can exist side by
+# side with their own type, phone, SIM and numbers.
+SUBENTRY_TARGET = "target"
+
 CONF_RECIPIENTS = "recipients"
+CONF_DEVICE = "device"
+CONF_SIM_NUMBER = "sim_number"
+CONF_SUBJECT = "subject"

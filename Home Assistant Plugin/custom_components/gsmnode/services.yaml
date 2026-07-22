@@ -1,13 +1,85 @@
-send_sms:
-  name: Send SMS
-  description: Send an SMS through the gateway.
+send:
+  name: Send
+  description: Send an SMS or MMS, or place a call, choosing how it goes out.
   fields:
+    type:
+      name: Type
+      description: What to send.
+      required: true
+      default: sms
+      selector:
+        select:
+          translation_key: message_type
+          options:
+            - sms
+            - mms
+            - call
+    phone_numbers:
+      name: Phone numbers
+      description: One or more recipients. A call is placed to each in turn.
+      required: true
+      example: '["+15551234567"]'
+      selector:
+        text:
+          multiple: true
+    message:
+      name: Message
+      description: The text to send. Required for an SMS; optional on an MMS that carries an attachment; ignored for a call.
+      example: Hello from Home Assistant
+      selector:
+        text:
+          multiline: true
+    subject:
+      name: Subject
+      description: MMS subject line.
+      example: Front door
+      selector:
+        text:
+    attachments:
+      name: Attachments
+      description: Files to send with an MMS, by path. Each must be under an allowlist_external_dirs directory, and at most 1 MB.
+      example: '["/config/www/snapshot.jpg"]'
+      selector:
+        text:
+          multiple: true
+    device:
+      name: Phone
+      description: Which gateway phone sends it. Leave empty for the gateway's own choice.
+      selector:
+        device:
+          integration: gsmnode
+    sim_number:
+      name: SIM slot
+      description: Which SIM to send or dial from, counting from 0. Leave empty for the phone's default SIM.
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 3
+          mode: box
+    schedule_at:
+      name: Send at
+      description: Hold the message until this time instead of sending it now. Not available for calls.
+      example: "2026-07-22 18:30:00"
+      selector:
+        datetime:
     config_entry_id:
       name: Gateway
       description: Which gsmnode gateway to send through. Only needed when more than one is configured.
       selector:
         config_entry:
           integration: gsmnode
+    device_id:
+      name: Phone (by gateway id)
+      description: Alternative to Phone, naming the gateway's own device ID instead of picking from the list.
+      example: my-phone
+      selector:
+        text:
+
+send_sms:
+  name: Send SMS
+  description: Send an SMS through the gateway.
+  fields:
     phone_numbers:
       name: Phone numbers
       description: One or more recipient phone numbers.
@@ -24,12 +96,12 @@ send_sms:
       selector:
         text:
           multiline: true
-    device_id:
+    device:
       name: Phone
-      description: Gateway phone to send from, by its device ID (defaults to the configured one, else the most recently seen).
-      example: my-phone
+      description: Which gateway phone sends it. Leave empty for the gateway's own choice.
       selector:
-        text:
+        device:
+          integration: gsmnode
     sim_number:
       name: SIM slot
       description: Which SIM to send on, counting from 0. Leave empty for the phone's default SIM.
@@ -45,17 +117,23 @@ send_sms:
       example: "2026-07-22 18:30:00"
       selector:
         datetime:
+    config_entry_id:
+      name: Gateway
+      description: Which gsmnode gateway to send through. Only needed when more than one is configured.
+      selector:
+        config_entry:
+          integration: gsmnode
+    device_id:
+      name: Phone (by gateway id)
+      description: Alternative to Phone, naming the gateway's own device ID instead of picking from the list.
+      example: my-phone
+      selector:
+        text:
 
 call:
   name: Place call
   description: Tell a gateway phone to place an outbound call.
   fields:
-    config_entry_id:
-      name: Gateway
-      description: Which gsmnode gateway to call through. Only needed when more than one is configured.
-      selector:
-        config_entry:
-          integration: gsmnode
     phone_number:
       name: Phone number
       description: The number to call.
@@ -63,9 +141,30 @@ call:
       example: "+15551234567"
       selector:
         text:
-    device_id:
+    device:
       name: Phone
-      description: Gateway phone to call from, by its device ID (defaults to the configured one, else the most recently seen).
+      description: Which gateway phone dials. Leave empty for the gateway's own choice.
+      selector:
+        device:
+          integration: gsmnode
+    sim_number:
+      name: SIM slot
+      description: Which SIM to dial from, counting from 0. Leave empty for the phone's default SIM.
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 3
+          mode: box
+    config_entry_id:
+      name: Gateway
+      description: Which gsmnode gateway to call through. Only needed when more than one is configured.
+      selector:
+        config_entry:
+          integration: gsmnode
+    device_id:
+      name: Phone (by gateway id)
+      description: Alternative to Phone, naming the gateway's own device ID instead of picking from the list.
       example: my-phone
       selector:
         text:

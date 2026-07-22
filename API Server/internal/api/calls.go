@@ -54,6 +54,10 @@ func recordToCall(rec pb.Record) callDTO {
 type enqueueCallRequest struct {
 	PhoneNumber string `json:"phone_number"`
 	DeviceID    string `json:"device_id"`
+	// SimNumber is the 0-based SIM slot to dial from, as for a message. A
+	// pointer so slot 0 can be chosen explicitly; omit it (nil) to let the
+	// phone place the call on its default SIM.
+	SimNumber *int `json:"sim_number"`
 }
 
 // handleEnqueueCall queues an outbound phone call for one of the user's devices.
@@ -83,13 +87,20 @@ func (s *Server) handleEnqueueCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rec, err := s.pb.Create(r.Context(), colMessages, pb.Record{
+	fields := pb.Record{
 		"phone_numbers": []string{phone},
 		"type":          msgTypeCall,
 		"device":        deviceRecID,
 		"owner":         uid,
 		"status":        statusPending,
-	})
+	}
+	// Stored the same way a message's slot is, so the device pulls it through
+	// the same field and recordToMessage hands it back 0-based.
+	if req.SimNumber != nil {
+		fields["sim_number"] = packSlot(*req.SimNumber)
+	}
+
+	rec, err := s.pb.Create(r.Context(), colMessages, fields)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return

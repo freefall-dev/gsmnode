@@ -12,23 +12,24 @@ Home Assistant ◄── API Server (webhooks)                  ◄── your p
 Like every other client, it talks **only** to the API Server (never PocketBase).
 
 **There is no YAML.** Every part of this — the connection, the sidebar item,
-which events arrive, and who the notify entity texts — is set from the Home
+which events arrive, and every notification target — is set from the Home
 Assistant UI, and nothing goes in `configuration.yaml`.
 
 ## What you get
 
 - **UI setup** (config flow) — add it under *Settings → Devices & Services*, and
   change the URL or password later without losing your entities (*Reconfigure*).
-- **Services** — `gsmnode.send_sms` and `gsmnode.call`, with field
-  pickers in the automation editor and *Developer Tools → Actions*.
+- **Actions** — `gsmnode.send` takes the lot: SMS, MMS or a call, to whichever
+  numbers, from whichever phone and SIM, now or later. `gsmnode.send_sms` and
+  `gsmnode.call` remain as short forms. The phone is a picker, not a typed id.
 - **Sensors** — a `binary_sensor` "API Server" (is the gateway up?) plus one
   connectivity sensor **per registered phone**, so an automation can react to
   the phone that actually sends your texts dropping off.
 - **Incoming events** *(optional)* — tick the gateway events you care about and
   they arrive on the Home Assistant bus, ready for an Event trigger. The webhook
   is registered at both ends for you. See below.
-- **Notify entity** *(optional)* — `notify.send_message` support for alerts and
-  blueprints, texting a set of numbers you configure.
+- **Notification targets** *(optional)* — add as many as you like, each its own
+  notify entity with its own type, phone, SIM and recipients. See below.
 - **Sidebar item** *(optional)* — a **gsmnode** entry in Home Assistant's left
   menu that opens the Web App or the API Server panel in place. See below.
 - **Branding** — the gsmnode mark and wordmark ship in `brand/`, so the
@@ -74,29 +75,68 @@ moves, use **Reconfigure** on the integration.
 
 ## Use it
 
-### Send an SMS
+### Send anything
+
+`gsmnode.send` is one action for all three kinds. Every field below has a picker
+in the automation editor — the type is a dropdown, the phone is a device list,
+the SIM is a number box:
+
+```yaml
+action: gsmnode.send
+data:
+  type: sms                 # sms | mms | call
+  phone_numbers: ["+15551234567"]
+  message: "Hello from Home Assistant"
+  device: 4a7f…             # optional: which phone, from the device picker
+  sim_number: 0             # optional: 0-based slot, works for calls too
+  schedule_at: "2026-07-22 18:30:00"   # optional (not for calls)
+```
+
+An MMS adds a subject and attachments; a call ignores the message and rings each
+number in turn:
+
+```yaml
+action: gsmnode.send
+data:
+  type: mms
+  phone_numbers: ["+15551234567"]
+  subject: "Front door"
+  message: "Someone at the door"
+  attachments: ["/config/www/snapshot.jpg"]
+```
+
+```yaml
+action: gsmnode.send
+data:
+  type: call
+  phone_numbers: ["+15551234567"]
+  sim_number: 1
+```
+
+Attachments are read off disk, so each path has to be under an
+`allowlist_external_dirs` directory, and each file at most 1 MB.
+
+### Short forms
 
 ```yaml
 action: gsmnode.send_sms
 data:
   phone_numbers: ["+15551234567"]
   message: "Hello from Home Assistant"
-  device_id: my-phone   # optional
   sim_number: 0         # optional (dual-SIM; slots count from 0)
-  schedule_at: "2026-07-22 18:30:00"  # optional (send later)
 ```
-
-### Place a call
 
 ```yaml
 action: gsmnode.call
 data:
   phone_number: "+15551234567"
-  device_id: my-phone   # optional
+  sim_number: 1         # optional
 ```
 
 With more than one gateway configured, add `config_entry_id:` to say which one
-to use — the automation editor offers a picker for it.
+to use — the automation editor offers a picker for it. `device` (the picker) and
+`device_id` (the gateway's own id) are interchangeable; `device_id` wins if both
+are given.
 
 ### Example automation
 
@@ -220,28 +260,40 @@ Two things to know:
   `gsmenc:v1:…` ciphertext. Home Assistant has no passphrase and cannot read
   them — this integration does not do E2E.
 
-## Notify entity
+## Notification targets
 
-**Configure → Notify entity** takes a list of numbers and creates a notify
-entity that texts them, so anything speaking `notify.send_message` — alerts,
-blueprints, scripts — can reach the gateway:
+A notify entity is called with a message and nothing else — `notify.send_message`
+has no field for a recipient, a phone or a SIM. So each **notification target**
+decides all of that up front, and you add one per combination you need. They
+appear on the integration's page under **Add notification target**:
+
+| Field | What it does |
+|---|---|
+| **Name** | names the entity — "Alerts" gives `notify.alerts` |
+| **Send as** | SMS, MMS, or a call that rings the recipients |
+| **Recipients** | every message to this target goes to all of them |
+| **Phone** | which gateway phone sends it, from a picker |
+| **SIM slot** | 0-based; works for calls as well as messages |
+| **MMS subject** | used when nothing passes a title with the message |
 
 ```yaml
 action: notify.send_message
 target:
-  entity_id: notify.gsmnode_sms
+  entity_id: notify.alerts
 data:
   message: "Washing machine finished"
 ```
 
-A notify entity has no recipient field of its own, which is why the numbers are
-fixed here. Anything that needs to pick recipients, a phone or a SIM per message
-wants `gsmnode.send_sms` instead. Leave the list empty and no entity is created.
+Each target gets its own device and entity, so an alert can text the family from
+SIM 0 while an escalation rings the on-call phone from the other one. Editing a
+target — or deleting it — is on the same page. An MMS target accepts a `title:`
+and sends it as the subject.
 
-> Replaced the old YAML `notify.gsmnode` platform in 3.0.0. If you had one in
-> `configuration.yaml`, delete that block and set the numbers here; automations
-> calling `notify.gsmnode` with a `target:` should move to `gsmnode.send_sms`,
-> which takes recipients per call.
+For anything that has to choose per message, use `gsmnode.send`, which takes all
+the same fields as arguments.
+
+> Replaced the single `notify.gsmnode` entity of 3.0.0, and the YAML platform
+> before it. If you had either, add a target here instead.
 
 ## How it works
 
@@ -259,6 +311,12 @@ wants `gsmnode.send_sms` instead. Leave the list empty and no entity is created.
   registered when the entry loads and removed when it unloads. Nothing is
   proxied through Home Assistant — the browser fetches the page straight from
   the gateway.
+- `gsmnode.send` posts to `/api/messages` for an SMS or MMS and `/api/calls` for
+  a call; the SIM slot is 0-based on the wire in both. Choosing a SIM for a
+  **call** needs an API Server and Phone Agent from this repo at or after the
+  same commit — older ones accept the field and ignore it.
+- MMS attachments are read in an executor, checked against
+  `allowlist_external_dirs`, capped at 1 MB each, and base64'd into the request.
 - Incoming events use Home Assistant's own webhook component. The id is minted
   once per entry and stored with it, the URL is `GET`-proof (`POST` only), and
   each delivery is re-fired on the bus. Subscriptions on the gateway are
