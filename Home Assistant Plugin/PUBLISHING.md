@@ -21,9 +21,9 @@ by the review on the `hacs/default` pull request.
    the first push is rejected as non-fast-forward. Replace it once:
 
    ```sh
-   git fetch github main                        # look at what is there first
+   git fetch github-gsmnode-ha main                        # look at what is there first
    git subtree split --prefix="Home Assistant Plugin" \
-     | xargs -I{} git push --force github {}:refs/heads/main
+     | xargs -I{} git push --force github-gsmnode-ha {}:refs/heads/main
    ```
 
    Only ever for that first push, and only after confirming the commit being
@@ -43,7 +43,7 @@ by the review on the `hacs/default` pull request.
 From the monorepo root, once:
 
 ```sh
-git remote add github https://github.com/freefall-dev/gsmnode-ha.git
+git remote add github-gsmnode-ha https://github.com/freefall-dev/gsmnode-ha.git
 ```
 
 Then, whenever this folder changes and is committed:

@@ -12,15 +12,17 @@
 # this folder contains.
 #
 # First run, once:
-#   git remote add github https://github.com/freefall-dev/gsmnode-ha.git
+#   git remote add github-gsmnode-ha https://github.com/freefall-dev/gsmnode-ha.git
 #
 # Then, from the repo root:
 #   sh scripts/publish-ha-plugin.sh
 #
+# A different remote or branch can be passed as the first and second argument.
+#
 set -eu
 
 PREFIX="Home Assistant Plugin"
-REMOTE="${1:-github}"
+REMOTE="${1:-github-gsmnode-ha}"
 BRANCH="${2:-main}"
 
 cd "$(dirname "$0")/.."
