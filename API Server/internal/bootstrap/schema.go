@@ -118,6 +118,10 @@ var collectionsSchema = map[string][]fieldDef{
 	"webhooks": {
 		fSelect("event", WebhookEvents, false),
 		fURL("url", true),
+		// Shared secret the subscriber supplies at registration; deliveries to
+		// this URL are HMAC-signed with it. Optional, so an unsigned webhook
+		// registered before this existed keeps working.
+		fText("secret", false),
 		fRelation("device", "devices", false, false),
 		fRelation("owner", "users", true, true),
 		fAutodate("created", true, false),

@@ -130,7 +130,7 @@ the container is recreated.
 | `GET` | `/api/messages/{id}` | Message state |
 | `GET` | `/api/inbox` | Received SMS/data/MMS (`?type=sms\|data\|mms`) |
 | `GET` | `/api/webhooks` | List webhooks |
-| `POST` | `/api/webhooks` | Register `{event, url, device_id?}` |
+| `POST` | `/api/webhooks` | Register `{event, url, device_id?, secret?}` |
 | `DELETE` | `/api/webhooks/{id}` | Delete webhook |
 | `GET` | `/api/integrations/email-to-sms` | Your resolved Email-to-SMS settings (cascade) |
 | `PUT` | `/api/integrations/email-to-sms` | Save your (or your org's) IMAP mailbox `{enabled?, scope?, config?}` |
@@ -219,6 +219,30 @@ Delivered as `POST {event, device_id, payload, created_at}` to the registered UR
 | `call:received` | An inbound call is reported |
 | `call:sent` | An outbound call is reported |
 | `call:failed` | A call is missed / rejected / failed |
+
+#### Signing
+
+Register with a `secret` and every delivery to that URL is signed with it:
+
+```
+X-GsmNode-Timestamp: 1700000000
+X-GsmNode-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>">
+```
+
+The receiver recomputes the MAC over the bytes it read and rejects a mismatch,
+and rejects a timestamp too far from its own clock. Both are needed: the
+signature proves the delivery came from this server and was not edited, and the
+age check stops a captured one being replayed. The timestamp is inside the MAC
+so it cannot be rewritten to make an old delivery look fresh.
+
+The secret is chosen by the subscriber, stored on the webhook record, and never
+returned — it is deliberately absent from the webhook DTO, so listing your
+webhooks cannot read it back. A webhook registered without one is delivered
+unsigned, which is what keeps subscriptions made before signing existed working.
+
+Delivery failures log the webhook's origin only, never the full URL: a receiver
+like Home Assistant authenticates by an unguessable path, so the path is itself
+a credential and does not belong in a log file.
 
 ### End-to-end encryption (optional)
 

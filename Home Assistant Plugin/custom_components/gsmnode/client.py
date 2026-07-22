@@ -215,9 +215,14 @@ class GsmNodeClient:
             return []
         return [item for item in items if isinstance(item, dict)]
 
-    async def async_create_webhook(self, event: str, url: str) -> None:
-        """Subscribe url to one gateway event."""
-        await self._call("POST", "/api/webhooks", {"event": event, "url": url})
+    async def async_create_webhook(
+        self, event: str, url: str, secret: str | None = None
+    ) -> None:
+        """Subscribe url to one gateway event, signed with secret if given."""
+        payload: dict[str, Any] = {"event": event, "url": url}
+        if secret:
+            payload["secret"] = secret
+        await self._call("POST", "/api/webhooks", payload)
 
     async def async_delete_webhook(self, webhook_id: str) -> None:
         """Remove a registered webhook by its record id."""

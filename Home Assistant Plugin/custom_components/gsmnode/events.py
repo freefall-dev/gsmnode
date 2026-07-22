@@ -12,15 +12,23 @@ the automation editor can trigger on directly.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
+import time
+from contextlib import suppress
 from functools import partial
+from ipaddress import ip_address
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from aiohttp.web import Request, Response
 from homeassistant.components import webhook
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.network import NoURLAvailableError
+from homeassistant.util.json import json_loads
+from homeassistant.util.network import is_local
 
 from .client import GsmNodeClient, GsmNodeError
 from .const import (
@@ -28,7 +36,11 @@ from .const import (
     CONF_CALLBACK_URL,
     CONF_EVENTS,
     CONF_WEBHOOK_ID,
+    CONF_WEBHOOK_SECRET,
     DOMAIN,
+    HEADER_SIGNATURE,
+    HEADER_TIMESTAMP,
+    SIGNATURE_TOLERANCE_SECONDS,
     bus_event,
 )
 
@@ -70,10 +82,16 @@ async def async_setup_events(
         webhook_id,
         _handle_webhook,
         allowed_methods=["POST"],
+        # When the gateway reaches Home Assistant on the local network, refuse
+        # the webhook from anywhere else. The signature below is the real
+        # defence; this keeps a forged POST from being processed at all.
+        local_only=_is_local(hass, entry, url),
     )
     entry.async_on_unload(partial(webhook.async_unregister, hass, webhook_id))
 
-    await _async_try_reconcile(client, webhook_id, url, events)
+    await _async_try_reconcile(
+        client, webhook_id, url, events, entry.data.get(CONF_WEBHOOK_SECRET)
+    )
 
 
 async def async_remove_events(
@@ -96,7 +114,11 @@ async def async_remove_events(
 
 
 async def _async_try_reconcile(
-    client: GsmNodeClient, webhook_id: str, url: str | None, events: list[str]
+    client: GsmNodeClient,
+    webhook_id: str,
+    url: str | None,
+    events: list[str],
+    secret: str | None = None,
 ) -> None:
     """Reconcile, downgrading any failure to a warning.
 
@@ -105,9 +127,32 @@ async def _async_try_reconcile(
     reload anyway.
     """
     try:
-        await _async_reconcile(client, webhook_id, url, events)
+        await _async_reconcile(client, webhook_id, url, events, secret)
     except GsmNodeError as err:
         _LOGGER.warning("gsmnode: could not update webhooks on the gateway: %s", err)
+
+
+def _is_local(hass: HomeAssistant, entry: GsmNodeConfigEntry, url: str) -> bool:
+    """Whether the gateway reaches Home Assistant over the local network.
+
+    Two ways to be sure of it: the address is the internal one Home Assistant
+    knows itself by, or it is a private / loopback IP. A hostname that is
+    neither is assumed remote, since guessing wrong the other way would make
+    Home Assistant refuse deliveries it should accept.
+    """
+    with suppress(NoURLAvailableError):
+        if url == webhook.async_generate_url(
+            hass, entry.data[CONF_WEBHOOK_ID], allow_external=False
+        ):
+            return True
+
+    host = urlparse(url).hostname
+    if not host:
+        return False
+    try:
+        return is_local(ip_address(host))
+    except ValueError:
+        return False  # a hostname, not an address — cannot tell
 
 
 def _callback_url(
@@ -130,7 +175,11 @@ def _callback_url(
 
 
 async def _async_reconcile(
-    client: GsmNodeClient, webhook_id: str, url: str | None, events: list[str]
+    client: GsmNodeClient,
+    webhook_id: str,
+    url: str | None,
+    events: list[str],
+    secret: str | None = None,
 ) -> None:
     """Make the gateway's subscriptions match `events`, and nothing else.
 
@@ -156,15 +205,33 @@ async def _async_reconcile(
 
     for event in sorted(wanted):
         if url:
-            await client.async_create_webhook(event, url)
+            await client.async_create_webhook(event, url, secret)
 
 
 async def _handle_webhook(
     hass: HomeAssistant, webhook_id: str, request: Request
 ) -> Response | None:
-    """Turn one delivery from the gateway into an event on the bus."""
+    """Turn one delivery from the gateway into an event on the bus.
+
+    Anything that reaches here has only proved it knows the webhook URL, which
+    the gateway also knows and stores. The signature is what proves the delivery
+    came from the gateway and has not been edited or replayed — automations act
+    on these events, so believing a forged one is the whole risk.
+    """
+    raw = await request.read()
+
+    entry = _entry_for(hass, webhook_id)
+    if entry is None:
+        # Nothing to verify against, so nothing to believe.
+        _LOGGER.warning("gsmnode: delivery for an unknown webhook rejected")
+        return Response(status=401)
+    if (secret := entry.data.get(CONF_WEBHOOK_SECRET)) and not _signature_ok(
+        request, raw, secret
+    ):
+        return Response(status=401)
+
     try:
-        body: Any = await request.json()
+        body: Any = json_loads(raw)
     except ValueError:
         _LOGGER.warning("gsmnode: webhook called with a body that is not JSON")
         return Response(status=400)
@@ -186,3 +253,46 @@ async def _handle_webhook(
 
     hass.bus.async_fire(bus_event(event), data)
     return None
+
+
+def _entry_for(hass: HomeAssistant, webhook_id: str) -> GsmNodeConfigEntry | None:
+    """The entry this webhook belongs to, by the id in its URL."""
+    return next(
+        (
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get(CONF_WEBHOOK_ID) == webhook_id
+        ),
+        None,
+    )
+
+
+def _signature_ok(request: Request, raw: bytes, secret: str) -> bool:
+    """Verify one delivery against the shared secret.
+
+    The MAC covers "<timestamp>.<body>", so the timestamp cannot be edited to
+    make a captured delivery look fresh: changing it invalidates the signature,
+    and an old one is rejected on age.
+    """
+    sent = request.headers.get(HEADER_SIGNATURE, "")
+    timestamp = request.headers.get(HEADER_TIMESTAMP, "")
+    if not sent or not timestamp:
+        _LOGGER.warning("gsmnode: unsigned delivery rejected")
+        return False
+
+    try:
+        age = abs(time.time() - int(timestamp))
+    except ValueError:
+        _LOGGER.warning("gsmnode: delivery with an unreadable timestamp rejected")
+        return False
+    if age > SIGNATURE_TOLERANCE_SECONDS:
+        _LOGGER.warning("gsmnode: delivery %.0fs out of date rejected", age)
+        return False
+
+    expected = hmac.new(
+        secret.encode(), f"{timestamp}.".encode() + raw, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(sent.removeprefix("sha256="), expected):
+        _LOGGER.warning("gsmnode: delivery with a bad signature rejected")
+        return False
+    return True

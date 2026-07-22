@@ -1,6 +1,7 @@
 """Config flow for the gsmnode integration (UI setup)."""
 from __future__ import annotations
 
+import secrets
 from typing import Any
 
 import voluptuous as vol
@@ -33,6 +34,7 @@ from .const import (
     CONF_SIM_NUMBER,
     CONF_SUBJECT,
     CONF_WEBHOOK_ID,
+    CONF_WEBHOOK_SECRET,
     DEFAULT_API_BASE,
     DEFAULT_EVENTS,
     DEFAULT_PANEL_TITLE,
@@ -189,9 +191,11 @@ class GsmNodeConfigFlow(ConfigFlow, domain=DOMAIN):
                     data={
                         **user_input,
                         CONF_API_BASE: api_base,
-                        # Minted once and kept for the life of the entry: this is
-                        # the secret in the URL the gateway posts events to.
+                        # Both minted once and kept for the life of the entry:
+                        # the id is the secret in the URL the gateway posts to,
+                        # and the key it signs those deliveries with.
                         CONF_WEBHOOK_ID: webhook.async_generate_id(),
+                        CONF_WEBHOOK_SECRET: secrets.token_hex(32),
                     },
                 )
 

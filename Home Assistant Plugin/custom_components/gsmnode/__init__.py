@@ -11,6 +11,8 @@ optional notify entity, and an optional sidebar panel.
 """
 from __future__ import annotations
 
+import secrets
+
 from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
@@ -23,6 +25,7 @@ from .const import (
     CONF_API_BASE,
     CONF_DEVICE_ID,
     CONF_WEBHOOK_ID,
+    CONF_WEBHOOK_SECRET,
     DOMAIN,
 )
 from .coordinator import GsmNodeCoordinator
@@ -44,11 +47,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: GsmNodeConfigEntry) -> bool:
     """Set up gsmnode from a config entry."""
+    # Entries made before incoming events existed carry neither of these, and
+    # one made before deliveries were signed carries no secret.
+    missing = {}
     if not entry.data.get(CONF_WEBHOOK_ID):
-        # Entries created before incoming events existed have no webhook id.
-        hass.config_entries.async_update_entry(
-            entry, data={**entry.data, CONF_WEBHOOK_ID: webhook.async_generate_id()}
-        )
+        missing[CONF_WEBHOOK_ID] = webhook.async_generate_id()
+    if not entry.data.get(CONF_WEBHOOK_SECRET):
+        missing[CONF_WEBHOOK_SECRET] = secrets.token_hex(32)
+    if missing:
+        hass.config_entries.async_update_entry(entry, data={**entry.data, **missing})
 
     client = GsmNodeClient(
         hass,

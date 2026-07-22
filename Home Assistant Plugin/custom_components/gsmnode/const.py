@@ -7,6 +7,9 @@ DOMAIN = "gsmnode"
 CONF_API_BASE = "api_base"
 CONF_DEVICE_ID = "device_id"
 CONF_WEBHOOK_ID = "webhook_id"
+# Shared with the gateway at registration; every delivery is HMAC-signed with
+# it, so a forged POST to the webhook URL is rejected rather than believed.
+CONF_WEBHOOK_SECRET = "webhook_secret"
 
 DEFAULT_API_BASE = "http://localhost:8080"
 DEFAULT_NAME = "gsmnode"
@@ -83,6 +86,14 @@ WEBHOOK_EVENTS = [
     "call:failed",
 ]
 DEFAULT_EVENTS = ["sms:received"]
+
+# Signature headers the API Server sends with every delivery.
+HEADER_SIGNATURE = "X-GsmNode-Signature"
+HEADER_TIMESTAMP = "X-GsmNode-Timestamp"
+# How stale a delivery may be before it is treated as a replay. Generous enough
+# for clock skew between two machines, short enough that a captured POST is not
+# useful for long.
+SIGNATURE_TOLERANCE_SECONDS = 300
 
 # Bus event names are the gateway's, prefixed and made identifier-safe:
 # "sms:data-received" arrives as "gsmnode_sms_data_received".

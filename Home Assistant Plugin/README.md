@@ -345,6 +345,46 @@ the same fields as arguments.
   reconciled on every load, so the set on the server always matches the ticks in
   the form.
 
+## Security
+
+Worth understanding before this carries anything that matters.
+
+**Use https if the gateway is not on a network you trust.** Over plain http the
+login sends your gateway password in the request body, the token that follows
+rides in a header, and message text and recipient numbers are readable to
+anything on the path. The client uses Home Assistant's shared session, which
+validates certificates — so https gives real protection, and a self-signed
+certificate will be refused with no override. The API Server speaks http only,
+so https means putting a reverse proxy in front of it.
+
+**Incoming deliveries are signed.** The webhook URL alone is a weak credential:
+the gateway knows it, stores it, and anything that learns it could otherwise
+post a forged `sms:received` that automations would act on. So the integration
+mints a secret per entry, hands it to the gateway at registration, and the
+gateway signs every delivery:
+
+```
+X-GsmNode-Timestamp: 1700000000
+X-GsmNode-Signature: sha256=<hmac-sha256 of "<timestamp>.<body>">
+```
+
+Anything unsigned, wrongly signed, or more than five minutes old is answered
+`401` and never reaches the bus. The timestamp is inside the MAC, so a captured
+delivery cannot be replayed by rewriting its header. When the gateway reaches
+Home Assistant on the local network, the webhook is additionally registered
+`local_only`, so a forged request from outside is refused before any of this.
+
+**What is still worth knowing:**
+
+- The gateway password is stored in the config entry, which Home Assistant
+  writes unencrypted to `.storage/core.config_entries`. Filesystem or backup
+  access to the Home Assistant host gives up that password. The session token
+  itself is only ever held in memory.
+- Messages sent from here are **not** end-to-end encrypted, so the API Server
+  and its database can read them, unlike ones composed in the Web App.
+- The sidebar panel loads the gateway straight into your browser, so http there
+  is your browser's plaintext, and the gateway login is typed into that frame.
+
 ## Brand assets
 
 `brand/` holds what Home Assistant shows for the integration itself, in the

@@ -3,9 +3,15 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 
 	"smsgateway/apiserver/internal/bootstrap"
@@ -63,6 +69,10 @@ type createWebhookRequest struct {
 	Event    string `json:"event"`
 	URL      string `json:"url"`
 	DeviceID string `json:"device_id"`
+	// Secret, when set, is the key deliveries to this URL are signed with. The
+	// subscriber chooses it — it never leaves this server afterwards, and is
+	// deliberately absent from webhookDTO so a listing cannot hand it back.
+	Secret string `json:"secret"`
 }
 
 // handleCreateWebhook registers a webhook for the user.
@@ -86,6 +96,9 @@ func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 	fields := pb.Record{"owner": uid, "event": req.Event, "url": req.URL}
 	if req.DeviceID != "" {
 		fields["device"] = req.DeviceID
+	}
+	if req.Secret != "" {
+		fields["secret"] = req.Secret
 	}
 	rec, err := s.pb.Create(r.Context(), colWebhooks, fields)
 	if err != nil {
@@ -149,28 +162,60 @@ func (s *Server) dispatchWebhooks(owner, deviceID, event string, payload map[str
 			if dev := asString(hook["device"]); dev != "" && dev != deviceID {
 				continue
 			}
-			deliverWebhook(ctx, asString(hook["url"]), raw)
+			deliverWebhook(ctx, asString(hook["url"]), asString(hook["secret"]), raw)
 		}
 	}()
 }
 
-func deliverWebhook(ctx context.Context, url string, body []byte) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+// Signature headers. The receiver recomputes the MAC over "<timestamp>.<body>"
+// and rejects anything that does not match, or whose timestamp has aged out —
+// the timestamp is inside the MAC so it cannot be edited to refresh a replay.
+const (
+	headerSignature = "X-GsmNode-Signature"
+	headerTimestamp = "X-GsmNode-Timestamp"
+)
+
+// signPayload returns the hex HMAC-SHA256 of "<ts>.<body>" under secret.
+func signPayload(secret string, ts int64, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	fmt.Fprintf(mac, "%d.", ts)
+	mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// redactURL keeps a webhook URL loggable without logging the secret in it.
+// Home Assistant authenticates its webhooks by an unguessable path alone, so
+// the path is the credential and only the origin may be written down.
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "(unparseable url)"
+	}
+	return u.Scheme + "://" + u.Host + "/…"
+}
+
+func deliverWebhook(ctx context.Context, rawURL, secret string, body []byte) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(body))
 	if err != nil {
-		log.Printf("webhook build request %s: %v", url, err)
+		log.Printf("webhook build request %s: %v", redactURL(rawURL), err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "gsmnode-api/1.0")
+	if secret != "" {
+		ts := time.Now().Unix()
+		req.Header.Set(headerTimestamp, strconv.FormatInt(ts, 10))
+		req.Header.Set(headerSignature, "sha256="+signPayload(secret, ts, body))
+	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("webhook delivery to %s failed: %v", url, err)
+		log.Printf("webhook delivery to %s failed: %v", redactURL(rawURL), err)
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		log.Printf("webhook %s returned %d", url, resp.StatusCode)
+		log.Printf("webhook %s returned %d", redactURL(rawURL), resp.StatusCode)
 	}
 }

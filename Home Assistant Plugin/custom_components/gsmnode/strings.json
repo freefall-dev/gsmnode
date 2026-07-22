@@ -11,7 +11,7 @@
           "device_id": "Default phone (optional)"
         },
         "data_description": {
-          "api_base": "For example http://10.2.1.10:8080 — it must be reachable from Home Assistant.",
+          "api_base": "For example https://gsmnode.example.com or http://10.2.1.10:8080 — it must be reachable from Home Assistant. Plain http sends your password, your messages and the recipients' numbers in the clear: use https unless the gateway is on a network you trust completely.",
           "device_id": "Device ID of the phone to send through by default. Leave empty to use the most recently seen one."
         }
       },
@@ -23,6 +23,9 @@
           "email": "Email",
           "password": "Password",
           "device_id": "Default phone (optional)"
+        },
+        "data_description": {
+          "api_base": "For example https://gsmnode.example.com or http://10.2.1.10:8080 — it must be reachable from Home Assistant. Plain http sends your password, your messages and the recipients' numbers in the clear: use https unless the gateway is on a network you trust completely."
         }
       },
       "reauth_confirm": {
@@ -76,7 +79,7 @@
           "callback_url": "Home Assistant address (optional)"
         },
         "data_description": {
-          "callback_url": "Where the gateway should reach Home Assistant, if that differs from the address Home Assistant knows itself by. Just the base, e.g. http://10.2.1.20:8123 — the webhook path is added for you."
+          "callback_url": "Where the gateway should reach Home Assistant, if that differs from the address Home Assistant knows itself by. Just the base, e.g. http://10.2.1.20:8123 — the webhook path is added for you. Deliveries are signed either way, so a forged one is rejected."
         }
       }
     },
