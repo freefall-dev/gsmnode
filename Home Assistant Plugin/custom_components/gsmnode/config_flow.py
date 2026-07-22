@@ -48,7 +48,7 @@ from .const import (
     PANEL_NONE,
     PANEL_WEB_APP,
     SUBENTRY_TARGET,
-    WEBHOOK_EVENTS,
+    WEBHOOK_EVENT_LABELS,
     bus_event,
 )
 from .panel import async_resolve_panel_url
@@ -91,10 +91,12 @@ EVENTS_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_EVENTS, default=DEFAULT_EVENTS): selector.SelectSelector(
             selector.SelectSelectorConfig(
-                options=WEBHOOK_EVENTS,
+                options=[
+                    selector.SelectOptionDict(value=event, label=label)
+                    for event, label in WEBHOOK_EVENT_LABELS.items()
+                ],
                 multiple=True,
                 mode=selector.SelectSelectorMode.LIST,
-                translation_key="events",
             )
         ),
         vol.Optional(CONF_CALLBACK_URL): selector.TextSelector(

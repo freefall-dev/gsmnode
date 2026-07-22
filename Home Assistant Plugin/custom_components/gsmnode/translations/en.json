@@ -96,20 +96,6 @@
         "custom": "Another address"
       }
     },
-    "events": {
-      "options": {
-        "sms:received": "SMS received",
-        "sms:sent": "SMS sent",
-        "sms:delivered": "SMS delivered",
-        "sms:failed": "SMS failed",
-        "sms:data-received": "Data SMS received",
-        "mms:received": "MMS received",
-        "mms:downloaded": "MMS downloaded",
-        "call:received": "Call received",
-        "call:sent": "Call placed",
-        "call:failed": "Call failed"
-      }
-    },
     "message_type": {
       "options": {
         "sms": "SMS — a text message",

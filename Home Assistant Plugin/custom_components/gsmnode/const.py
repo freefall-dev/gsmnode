@@ -72,19 +72,26 @@ CONF_EVENTS = "events"
 CONF_CALLBACK_URL = "callback_url"
 
 # The events the API Server can be subscribed to, in its own canonical order
-# (bootstrap.WebhookEvents on the server side).
-WEBHOOK_EVENTS = [
-    "sms:received",
-    "sms:sent",
-    "sms:delivered",
-    "sms:failed",
-    "sms:data-received",
-    "mms:received",
-    "mms:downloaded",
-    "call:received",
-    "call:sent",
-    "call:failed",
-]
+# (bootstrap.WebhookEvents on the server side), each with the label the picker
+# shows for it.
+#
+# The labels sit here rather than in strings.json beside the other selectors'
+# because Home Assistant requires a translation key to match [a-z0-9-_]+, and
+# these keys are the server's own event names — colons and all. What is stored
+# and sent has to stay exactly what the server expects, so the label travels
+# with it instead of being looked up.
+WEBHOOK_EVENT_LABELS = {
+    "sms:received": "SMS received",
+    "sms:sent": "SMS sent",
+    "sms:delivered": "SMS delivered",
+    "sms:failed": "SMS failed",
+    "sms:data-received": "Data SMS received",
+    "mms:received": "MMS received",
+    "mms:downloaded": "MMS downloaded",
+    "call:received": "Call received",
+    "call:sent": "Call placed",
+    "call:failed": "Call failed",
+}
 DEFAULT_EVENTS = ["sms:received"]
 
 # Signature headers the API Server sends with every delivery.
